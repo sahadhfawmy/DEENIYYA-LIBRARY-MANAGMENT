@@ -37,27 +37,9 @@ export async function sha256(str: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Default hash for emergency Super Admin passkey: "Admin@Deeniya2026" or "123456"
+// Predefined hashes for emergency Super Admin passkey: "Admin@Deeniya2026" or "123456"
 export const MASTER_PASSKEY_HASH = '179ef2ba9ea9d20c529d675e6d64d509a24cfc3b7e713501258673752e2a056a'; // "Admin@Deeniya2026"
 export const BACKUP_PIN_HASH = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'; // "123456"
-
-// Custom Password and Screen Lock Management
-export const CUSTOM_PASSWORD_KEY = 'dac_custom_admin_password_hash';
-export const CUSTOM_PIN_KEY = 'dac_custom_pin_hash';
-export const AUTO_LOCK_MINUTES_KEY = 'dac_auto_lock_minutes';
-export const SCREEN_LOCKED_KEY = 'dac_screen_locked';
-
-export async function setCustomAdminPassword(newPassword: string): Promise<string> {
-  const hash = await sha256(newPassword.trim());
-  localStorage.setItem(CUSTOM_PASSWORD_KEY, hash);
-  return hash;
-}
-
-export async function setCustomAdminPin(newPin: string): Promise<string> {
-  const hash = await sha256(newPin.trim());
-  localStorage.setItem(CUSTOM_PIN_KEY, hash);
-  return hash;
-}
 
 export async function verifyAdminPasswordOrPin(input: string): Promise<boolean> {
   const raw = input.trim();
@@ -87,17 +69,7 @@ export async function verifyAdminPasswordOrPin(input: string): Promise<boolean> 
     '54658665f9b3d952c5d3a45b7caa771651eb3482fe5a7e9ab6bddcec39c01125', // dheeniyya2026
   ];
 
-  if (predefinedHashes.includes(hash)) return true;
-
-  // 3. User configured custom password
-  const customPasswordHash = localStorage.getItem(CUSTOM_PASSWORD_KEY);
-  if (customPasswordHash && customPasswordHash === hash) return true;
-
-  // 4. User configured custom quick PIN
-  const customPinHash = localStorage.getItem(CUSTOM_PIN_KEY);
-  if (customPinHash && customPinHash === hash) return true;
-
-  return false;
+  return predefinedHashes.includes(hash);
 }
 
 // Brute Force Lockout Management

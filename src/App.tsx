@@ -42,7 +42,6 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { PrintablePdfModal, ReportType } from './components/PrintablePdfModal';
 import { BookEditModal } from './components/BookEditModal';
 import { GeminiChatbot } from './components/GeminiChatbot';
-import { ScreenLockModal } from './components/ScreenLockModal';
 import {
   LuxuryThemeId,
   getActiveThemeId,
@@ -69,9 +68,6 @@ export default function App() {
   const [activeThemeId, setActiveThemeIdState] = useState<LuxuryThemeId>(() => getActiveThemeId());
   const [themeMode, setThemeModeState] = useState<'dark' | 'light'>(() => getThemeMode());
   const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
-  const [isScreenLocked, setIsScreenLocked] = useState<boolean>(() => {
-    return localStorage.getItem('dac_screen_locked') === 'true';
-  });
 
   // Auth Session State
   const [session, setSession] = useState<AuthSession>(() => {
@@ -158,34 +154,8 @@ export default function App() {
   // 3. Luxury Theme & Dark Mode Synchronizer
   useEffect(() => {
     applyThemeToDOM(activeThemeId, themeMode);
+    localStorage.removeItem('dac_screen_locked');
   }, [activeThemeId, themeMode]);
-
-  // 4. Inactivity Screen Auto-Lock Watcher
-  useEffect(() => {
-    if (session.role !== 'SUPER_ADMIN' || isScreenLocked) return;
-
-    let timer: ReturnType<typeof setTimeout>;
-
-    const resetInactivityTimer = () => {
-      const mins = parseInt(localStorage.getItem('dac_auto_lock_minutes') || '15', 10);
-      if (mins <= 0) return;
-
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        setIsScreenLocked(true);
-        localStorage.setItem('dac_screen_locked', 'true');
-      }, mins * 60 * 1000);
-    };
-
-    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    activityEvents.forEach((evt) => window.addEventListener(evt, resetInactivityTimer, { passive: true }));
-    resetInactivityTimer();
-
-    return () => {
-      clearTimeout(timer);
-      activityEvents.forEach((evt) => window.removeEventListener(evt, resetInactivityTimer));
-    };
-  }, [session.role, isScreenLocked]);
 
   // Audit Log helper
   const addAuditLog = useCallback(
@@ -576,10 +546,6 @@ export default function App() {
           students: students.length,
           overdue: overdueCount,
         }}
-        onTriggerLockScreen={() => {
-          setIsScreenLocked(true);
-          localStorage.setItem('dac_screen_locked', 'true');
-        }}
       />
 
       {/* Main Container */}
@@ -744,10 +710,6 @@ export default function App() {
               setActiveThemeId(t);
               setActiveThemeIdState(t);
             }}
-            onTriggerLockScreen={() => {
-              setIsScreenLocked(true);
-              localStorage.setItem('dac_screen_locked', 'true');
-            }}
           />
         )}
       </main>
@@ -763,21 +725,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Screen Lock Privacy Modal */}
-      <ScreenLockModal
-        isLocked={isScreenLocked && session.role === 'SUPER_ADMIN'}
-        onUnlock={() => {
-          setIsScreenLocked(false);
-          localStorage.setItem('dac_screen_locked', 'false');
-        }}
-        onLogout={() => {
-          handleLogout();
-          setIsScreenLocked(false);
-          localStorage.setItem('dac_screen_locked', 'false');
-        }}
-        collegeName={settings.name}
-      />
 
       {/* Admin Login Modal */}
       <AdminLoginModal

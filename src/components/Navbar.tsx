@@ -52,7 +52,6 @@ interface NavbarProps {
     students: number;
     overdue: number;
   };
-  onTriggerLockScreen?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -67,7 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeThemeId,
   onSelectTheme,
   stats,
-  onTriggerLockScreen,
 }) => {
   const isSuperAdmin = session.role === 'SUPER_ADMIN';
 
@@ -416,20 +414,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Super Admin Verified
                 </div>
               </div>
-              {onTriggerLockScreen && (
-                <button
-                  onClick={onTriggerLockScreen}
-                  className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 ${
-                    dimension === '3d'
-                      ? 'bg-gradient-to-b from-amber-50 to-amber-100 dark:from-amber-950/60 dark:to-amber-900/40 text-amber-800 dark:text-amber-200 border-t border-amber-200 dark:border-amber-800/80 border-b-2 border-amber-300 dark:border-amber-950 shadow-sm hover:from-amber-100'
-                      : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100'
-                  }`}
-                  title="Lock circulation screen (enter password or PIN to unlock)"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Lock</span>
-                </button>
-              )}
               <button
                 onClick={onLogout}
                 className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 ${
