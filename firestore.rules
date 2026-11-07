@@ -1,0 +1,174 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Security Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Super Admin privilege gate: verified email or explicit admin registry
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == "dheeniyyalibrarymanagement@gmail.com" && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 3. Entity Validation Helpers
+    function isValidBook(data) {
+      return data.keys().hasAll(['id', 't', 'a']) &&
+        data.keys().hasOnly(['id', 't', 'a', 'c', 'l', 'e', 'p', 'y', 'k', 'sh', 'arch']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.t is string && data.t.size() > 0 && data.t.size() <= 500 &&
+        data.a is string && data.a.size() > 0 && data.a.size() <= 500 &&
+        (!('c' in data) || (data.c is string && data.c.size() <= 100)) &&
+        (!('l' in data) || (data.l is string && data.l.size() <= 100)) &&
+        (!('e' in data) || (data.e is string && data.e.size() <= 100)) &&
+        (!('p' in data) || (data.p is string && data.p.size() <= 200)) &&
+        (!('y' in data) || (data.y is string && data.y.size() <= 50)) &&
+        (!('k' in data) || (data.k is string && data.k.size() <= 200)) &&
+        (!('sh' in data) || (data.sh is string && data.sh.size() <= 100)) &&
+        (!('arch' in data) || data.arch is bool);
+    }
+
+    function isValidBookCopy(data) {
+      return data.keys().hasAll(['id', 'b', 'r', 'st']) &&
+        data.keys().hasOnly(['id', 'b', 'r', 'v', 'st']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.b is string && data.b.size() <= 128 &&
+        data.r is string && data.r.size() > 0 && data.r.size() <= 50 &&
+        data.st in ['available', 'issued', 'lost', 'damaged'] &&
+        (!('v' in data) || (data.v is string && data.v.size() <= 100));
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['id', 'n']) &&
+        data.keys().hasOnly(['id', 'n', 'cl', 'ph', 'g', 'dob', 'adm', 'tn', 'rg', 'rx', 'ad', 'rm', 'img', 'reg', 'arch', 'off']) &&
+        data.id is string && data.id.size() <= 64 &&
+        data.n is string && data.n.size() > 0 && data.n.size() <= 200 &&
+        (!('cl' in data) || (data.cl is string && data.cl.size() <= 100)) &&
+        (!('ph' in data) || (data.ph is string && data.ph.size() <= 50)) &&
+        (!('g' in data) || (data.g is string && data.g.size() <= 200)) &&
+        (!('dob' in data) || (data.dob is string && data.dob.size() <= 30)) &&
+        (!('adm' in data) || (data.adm is string && data.adm.size() <= 30)) &&
+        (!('tn' in data) || (data.tn is string && data.tn.size() <= 100)) &&
+        (!('rg' in data) || (data.rg is string && data.rg.size() <= 50)) &&
+        (!('rx' in data) || (data.rx is string && data.rx.size() <= 30)) &&
+        (!('ad' in data) || (data.ad is string && data.ad.size() <= 300)) &&
+        (!('rm' in data) || (data.rm is string && data.rm.size() <= 500)) &&
+        (!('img' in data) || (data.img is string && data.img.size() <= 500000)) &&
+        (!('reg' in data) || (data.reg is string && data.reg.size() <= 30)) &&
+        (!('arch' in data) || data.arch is bool) &&
+        (!('off' in data) || data.off is bool);
+    }
+
+    function isValidLoan(data) {
+      return data.keys().hasAll(['id', 'cp', 'stu', 'out', 'due']) &&
+        data.keys().hasOnly(['id', 'cp', 'stu', 'out', 'due', 'ret', 'rm']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.cp is string && data.cp.size() <= 128 &&
+        data.stu is string && data.stu.size() <= 64 &&
+        data.out is string && data.out.size() <= 30 &&
+        data.due is string && data.due.size() <= 30 &&
+        (!('ret' in data) || (data.ret is string && data.ret.size() <= 50)) &&
+        (!('rm' in data) || (data.rm is string && data.rm.size() <= 200));
+    }
+
+    function isValidSecurityLog(data) {
+      return data.keys().hasAll(['id', 'a', 'by', 'at']) &&
+        data.keys().hasOnly(['id', 'a', 'by', 'at', 'ty', 'ip', 'ok', 'meta', 'rid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.a is string && data.a.size() <= 300 &&
+        data.by is string && data.by.size() <= 100 &&
+        data.at is string && data.at.size() <= 50 &&
+        (!('ty' in data) || (data.ty is string && data.ty.size() <= 50)) &&
+        (!('ip' in data) || (data.ip is string && data.ip.size() <= 100)) &&
+        (!('ok' in data) || data.ok is number) &&
+        (!('meta' in data) || (data.meta is string && data.meta.size() <= 500)) &&
+        (!('rid' in data) || (data.rid is string && data.rid.size() <= 100));
+    }
+
+    function isValidSystemSettings(data) {
+      return data.keys().hasAll(['name', 'days']) &&
+        data.keys().hasOnly(['name', 'lib', 'ar', 'days', 'staff', 'tz']) &&
+        data.name is string && data.name.size() <= 200 &&
+        data.days is number && data.days >= 1 && data.days <= 365 &&
+        (!('lib' in data) || (data.lib is string && data.lib.size() <= 200)) &&
+        (!('ar' in data) || (data.ar is string && data.ar.size() <= 200)) &&
+        (!('staff' in data) || (data.staff is string && data.staff.size() <= 100)) &&
+        (!('tz' in data) || (data.tz is string && data.tz.size() <= 50));
+    }
+
+    // 4. Collection Rules
+
+    // Books: Public can read for searching catalog; ONLY Super Admin can write
+    match /books/{bookId} {
+      allow get, list: if true;
+      allow create: if isSuperAdmin() && isValidId(bookId) && isValidBook(incoming());
+      allow update: if isSuperAdmin() && isValidId(bookId) && isValidBook(incoming()) && incoming().id == existing().id;
+      allow delete: if isSuperAdmin() && isValidId(bookId);
+    }
+
+    // Book Copies: Public can read inventory status; ONLY Super Admin can write
+    match /copies/{copyId} {
+      allow get, list: if true;
+      allow create: if isSuperAdmin() && isValidId(copyId) && isValidBookCopy(incoming());
+      allow update: if isSuperAdmin() && isValidId(copyId) && isValidBookCopy(incoming()) && incoming().id == existing().id;
+      allow delete: if isSuperAdmin() && isValidId(copyId);
+    }
+
+    // Students: STRICT PII PRIVACY. Only verified Super Admin can read or write
+    match /students/{studentId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isSuperAdmin() && isValidId(studentId) && isValidStudent(incoming());
+      allow update: if isSuperAdmin() && isValidId(studentId) && isValidStudent(incoming()) && incoming().id == existing().id;
+      allow delete: if isSuperAdmin() && isValidId(studentId);
+    }
+
+    // Loans: Student borrowing privacy. Only verified Super Admin can read or write
+    match /loans/{loanId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isSuperAdmin() && isValidId(loanId) && isValidLoan(incoming());
+      allow update: if isSuperAdmin() && isValidId(loanId) && isValidLoan(incoming()) && incoming().id == existing().id;
+      allow delete: if isSuperAdmin() && isValidId(loanId);
+    }
+
+    // Security Logs: Audit trail. Read by Super Admin; Create by Super Admin; Immutable (no update/delete)
+    match /security_logs/{logId} {
+      allow get, list: if isSuperAdmin();
+      allow create: if isSuperAdmin() && isValidId(logId) && isValidSecurityLog(incoming());
+      allow update, delete: if false;
+    }
+
+    // Admin Profiles: Managed only by Super Admin
+    match /admins/{adminUid} {
+      allow get: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin() && isValidId(adminUid);
+    }
+
+    // System Settings: Public can read general info; ONLY Super Admin can modify
+    match /system_settings/{settingId} {
+      allow get: if true;
+      allow create, update: if isSuperAdmin() && isValidId(settingId) && isValidSystemSettings(incoming());
+      allow delete: if isSuperAdmin() && isValidId(settingId);
+    }
+  }
+}

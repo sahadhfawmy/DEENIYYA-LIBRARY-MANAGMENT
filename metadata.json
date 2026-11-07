@@ -1,0 +1,6 @@
+{
+  "name": "Deeniya Arabic College Library - Secure Management System",
+  "description": "Enterprise-grade library management system with role-based access control, secure administrative authentication, catalog preservation, and audit logging for Deeniya Arabic College.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

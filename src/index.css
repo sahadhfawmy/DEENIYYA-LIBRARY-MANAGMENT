@@ -1,0 +1,122 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer utilities {
+  .font-arabic {
+    font-family: 'Amiri', 'Scheherazade New', 'Traditional Arabic', serif;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .animate-shake {
+    animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  }
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+/* Smooth theme transition across elements */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Luxury Theme Root Variables */
+html[data-theme="royal-gold"].dark {
+  --bg-main: #050b14;
+  --bg-card: #0b1528;
+  --border-card: rgba(212, 175, 55, 0.25);
+  --accent-gold: #d4af37;
+}
+
+html[data-theme="midnight-purple"].dark {
+  --bg-main: #07030e;
+  --bg-card: #140a24;
+  --border-card: rgba(192, 132, 252, 0.25);
+  --accent-gold: #c084fc;
+}
+
+html[data-theme="classic-ivory"] {
+  --bg-main: #fbf9f4;
+  --bg-card: #ffffff;
+  --border-card: rgba(180, 83, 9, 0.2);
+  --accent-gold: #b45309;
+}
+
+html[data-theme="modern-dark"].dark {
+  --bg-main: #090d16;
+  --bg-card: #0f172a;
+  --border-card: rgba(16, 185, 129, 0.25);
+  --accent-gold: #10b981;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-document,
+  #printable-document * {
+    visibility: visible;
+  }
+
+  #printable-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .no-print, header, footer, nav, button, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .print\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .print\:gap-4 {
+    gap: 1rem !important;
+  }
+
+  .page-break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "Book": {
+      "title": "Book",
+      "description": "Library bibliographic catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique book identifier" },
+        "t": { "type": "string", "maxLength": 500, "description": "Book title" },
+        "a": { "type": "string", "maxLength": 500, "description": "Book author" },
+        "c": { "type": "string", "maxLength": 100, "description": "Classification number" },
+        "l": { "type": "string", "maxLength": 100, "description": "Language" },
+        "e": { "type": "string", "maxLength": 100, "description": "Edition" },
+        "p": { "type": "string", "maxLength": 200, "description": "Publisher" },
+        "y": { "type": "string", "maxLength": 50, "description": "Year of publication" },
+        "k": { "type": "string", "maxLength": 200, "description": "Category or genre" },
+        "sh": { "type": "string", "maxLength": 100, "description": "Shelf location" },
+        "arch": { "type": "boolean", "description": "Whether book is archived" }
+      },
+      "required": ["id", "t", "a"]
+    },
+    "BookCopy": {
+      "title": "BookCopy",
+      "description": "Physical copy of a book with accession registration number",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Copy ID" },
+        "b": { "type": "string", "description": "Parent book ID" },
+        "r": { "type": "string", "maxLength": 50, "description": "Accession / registration number" },
+        "v": { "type": "string", "maxLength": 100, "description": "Volume / part title" },
+        "st": { "type": "string", "enum": ["available", "issued", "lost", "damaged"], "description": "Circulation status" }
+      },
+      "required": ["id", "b", "r", "st"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Enrolled student library profile and card record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^STU-[0-9]{4,6}$", "description": "Student unique ID" },
+        "n": { "type": "string", "maxLength": 200, "description": "Student full name" },
+        "cl": { "type": "string", "maxLength": 100, "description": "Class or academic year" },
+        "ph": { "type": "string", "maxLength": 50, "description": "Contact telephone number" },
+        "g": { "type": "string", "maxLength": 200, "description": "Parent or guardian name" },
+        "dob": { "type": "string", "maxLength": 20, "description": "Date of birth" },
+        "adm": { "type": "string", "maxLength": 20, "description": "Admission date" },
+        "tn": { "type": "string", "maxLength": 100, "description": "Town or village" },
+        "rg": { "type": "string", "maxLength": 50, "description": "Registration number" },
+        "rx": { "type": "string", "maxLength": 20, "description": "Registration expiry date" },
+        "ad": { "type": "string", "maxLength": 300, "description": "Residential address" },
+        "rm": { "type": "string", "maxLength": 500, "description": "Remarks or notes" },
+        "img": { "type": "string", "description": "Student photo data or storage URL" },
+        "reg": { "type": "string", "maxLength": 20, "description": "Registration date" },
+        "arch": { "type": "boolean", "description": "Archived flag" },
+        "off": { "type": "boolean", "description": "Inactive membership flag" }
+      },
+      "required": ["id", "n"]
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "Book borrowing circulation record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Loan identifier" },
+        "cp": { "type": "string", "description": "Copy ID" },
+        "stu": { "type": "string", "description": "Student ID" },
+        "out": { "type": "string", "maxLength": 20, "description": "Date issued" },
+        "due": { "type": "string", "maxLength": 20, "description": "Due date" },
+        "ret": { "type": "string", "maxLength": 50, "description": "Date returned if closed" },
+        "rm": { "type": "string", "maxLength": 200, "description": "Loan remarks" }
+      },
+      "required": ["id", "cp", "stu", "out", "due"]
+    },
+    "SecurityLog": {
+      "title": "SecurityLog",
+      "description": "Security audit logs, login records, and administrative changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log record ID" },
+        "a": { "type": "string", "maxLength": 300, "description": "Action performed" },
+        "by": { "type": "string", "maxLength": 100, "description": "User or identity executing action" },
+        "at": { "type": "string", "description": "ISO timestamp" },
+        "ty": { "type": "string", "maxLength": 50, "description": "Event category" },
+        "ip": { "type": "string", "maxLength": 100, "description": "Client IP or origin" },
+        "ok": { "type": "number", "description": "1 for success, 0 for failure" },
+        "meta": { "type": "string", "maxLength": 500, "description": "Additional context" }
+      },
+      "required": ["id", "a", "by", "at"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Registered Super Admin authorization profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "Verified administrator email" },
+        "role": { "type": "string", "enum": ["superadmin"], "description": "Role level" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Institution settings and borrowing rules",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 200, "description": "College name" },
+        "lib": { "type": "string", "maxLength": 200, "description": "Library department title" },
+        "ar": { "type": "string", "maxLength": 200, "description": "Arabic title" },
+        "days": { "type": "number", "description": "Default loan duration in days" },
+        "staff": { "type": "string", "maxLength": 100, "description": "Designated librarian name" },
+        "tz": { "type": "string", "maxLength": 50, "description": "Timezone" }
+      },
+      "required": ["name", "days"]
+    }
+  },
+  "firestore": {
+    "/books/{bookId}": {
+      "schema": { "$ref": "#/entities/Book" },
+      "description": "Publicly searchable bibliographic records"
+    },
+    "/copies/{copyId}": {
+      "schema": { "$ref": "#/entities/BookCopy" },
+      "description": "Physical accession copies and availability"
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Protected student membership records with private contact PII"
+    },
+    "/loans/{loanId}": {
+      "schema": { "$ref": "#/entities/Loan" },
+      "description": "Library loan and circulation records"
+    },
+    "/security_logs/{logId}": {
+      "schema": { "$ref": "#/entities/SecurityLog" },
+      "description": "Administrative security audit history and login logs"
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminProfile" },
+      "description": "Super admin authorization records"
+    },
+    "/system_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "Institution library configurations"
+    }
+  }
+}
