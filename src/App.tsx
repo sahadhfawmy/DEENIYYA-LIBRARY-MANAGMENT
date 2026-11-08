@@ -34,6 +34,8 @@ import {
   subscribeToCloudStudents,
   subscribeToCloudLoans,
   ensureAdminRecordInCloud,
+  verifyUserAdminStatus,
+  isOwnerEmail,
 } from './lib/firebase';
 import { SUPER_ADMIN_EMAIL, sendSecurityTelemetry } from './lib/security';
 
@@ -143,24 +145,39 @@ export default function App() {
     loadData();
   }, []);
 
-  // 2. Firebase Auth Observer
+  // 2. Firebase Auth Observer: strictly authoritative via cloud database validation
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser && firebaseUser.email) {
-        const email = firebaseUser.email.toLowerCase().trim();
-        if (email === SUPER_ADMIN_EMAIL.toLowerCase()) {
-          const newSession: AuthSession = {
-            role: 'SUPER_ADMIN',
-            email: SUPER_ADMIN_EMAIL,
-            name: firebaseUser.displayName || 'Super Admin',
-            uid: firebaseUser.uid,
-            loginAt: new Date().toISOString(),
-            expiresAt: Date.now() + 8 * 60 * 60 * 1000,
-          };
-          setSession(newSession);
-          localStorage.setItem('dac_admin_session', JSON.stringify(newSession));
-          ensureAdminRecordInCloud(firebaseUser.uid).catch(() => null);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const status = await verifyUserAdminStatus(firebaseUser);
+          if (status.isAuthorized) {
+            const newSession: AuthSession = {
+              role: status.role,
+              email: firebaseUser.email || status.email,
+              name: status.name || firebaseUser.displayName || 'Administrator',
+              uid: firebaseUser.uid,
+              loginAt: new Date().toISOString(),
+              expiresAt: Date.now() + 8 * 60 * 60 * 1000,
+            };
+            setSession(newSession);
+            localStorage.setItem('dac_admin_session', JSON.stringify(newSession));
+            if (isOwnerEmail(firebaseUser.email)) {
+              ensureAdminRecordInCloud(firebaseUser.uid, firebaseUser.email || SUPER_ADMIN_EMAIL).catch(() => null);
+            }
+          } else {
+            // Signed-in user is not authorized as an admin
+            await signOut(auth).catch(() => null);
+            setSession({ role: 'PUBLIC', email: null });
+            localStorage.removeItem('dac_admin_session');
+          }
+        } catch (err) {
+          console.warn('Auth observer verification note:', err);
         }
+      } else {
+        // No active Firebase user: strictly revoke admin privileges
+        setSession({ role: 'PUBLIC', email: null });
+        localStorage.removeItem('dac_admin_session');
       }
     });
     return () => unsubscribe();
@@ -171,7 +188,7 @@ export default function App() {
 
   // 3. Centralized Cloud Firestore Synchronization & Real-time Cross-Device Sync
   useEffect(() => {
-    if (session.role !== 'SUPER_ADMIN') return;
+    if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') return;
 
     let unsubStudents: (() => void) | undefined;
     let unsubLoans: (() => void) | undefined;
@@ -747,7 +764,7 @@ export default function App() {
     );
   }
 
-  const isSuperAdmin = session.role === 'SUPER_ADMIN';
+  const isSuperAdmin = session.role === 'SUPER_ADMIN' || session.role === 'ADMIN';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
@@ -933,6 +950,7 @@ export default function App() {
 
         {currentTab === 'set' && (
           <SettingsTab
+            session={session}
             settings={settings}
             isSuperAdmin={isSuperAdmin}
             onSaveSettings={handleSaveSettings}

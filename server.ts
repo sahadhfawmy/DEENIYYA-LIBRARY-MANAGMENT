@@ -204,35 +204,12 @@ app.post('/api/auth/admin-verify', authLimiter, (req: Request, res: Response) =>
     }
   }
 
-  // Master password & PIN verification (Direct Login - No Gmail Required)
-  const acceptedHashes = [
-    '179ef2ba9ea9d20c529d675e6d64d509a24cfc3b7e713501258673752e2a056a',
-    'a489f00d3d48e98e96507eeb772a6ec7cab8d50e43d4f6dc84ebda012cdc30b3', // Admin@Deeniya2026
-    '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', // 123456
-    '78033da557607023255672a6cc9ce5dbe95a90f921cd373fa66a42f9a6b8932e', // deeniya2026
-    '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', // admin123
-    '54658665f9b3d952c5d3a45b7caa771651eb3482fe5a7e9ab6bddcec39c01125', // dheeniyya2026
-  ];
-
-  const isHashValid = passwordHash && acceptedHashes.includes(passwordHash);
-
-  if (isHashValid || (isTargetEmail && passwordHash)) {
-    lastSuccessfulLogin = new Date().toISOString();
-    recordSecurityEvent('LOGIN_SUCCESS', req, `Super Admin authenticated via Master Credentials (${email})`, 'low');
-    return res.json({
-      success: true,
-      role: 'SUPER_ADMIN',
-      email: SUPER_ADMIN_EMAIL,
-      token: crypto.randomBytes(32).toString('hex'),
-      permissions: ['ALL'],
-    });
-  }
-
+  // Reject any unverified or bypass attempt
   failedAttemptCount++;
-  recordSecurityEvent('LOGIN_FAILED', req, `Failed credential verification for ${email}`, 'medium');
+  recordSecurityEvent('LOGIN_FAILED', req, `Unauthorized or bypass login attempt rejected for ${email}`, 'high');
   return res.status(401).json({
     success: false,
-    error: 'Invalid administrator credentials. Access attempts are monitored.',
+    error: 'Access Denied: Master passkey bypasses are permanently disabled. Authentication requires official Firebase Authentication credentials.',
   });
 });
 

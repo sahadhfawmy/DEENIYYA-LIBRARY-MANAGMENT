@@ -28,7 +28,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Student, Loan, Book, BookCopy, LibrarySettings } from '../types';
+import { Student, Loan, Book, BookCopy, LibrarySettings, AdminRecord } from '../types';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -39,6 +39,16 @@ export const googleProvider = new GoogleAuthProvider();
 setPersistence(auth, browserLocalPersistence).catch(() => null);
 
 export const SUPER_ADMIN_EMAIL = 'dheeniyyalibrarymanagement@gmail.com';
+export const OWNER_EMAILS = [
+  'dheeniyyalibrarymanagement@gmail.com',
+  'fawmysahadh90@gmail.com',
+];
+
+export function isOwnerEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return OWNER_EMAILS.some((owner) => owner.toLowerCase() === normalized);
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -102,25 +112,89 @@ export async function testConnection(): Promise<boolean> {
 }
 
 // --------------------------------------------------------------------------
-// 1. FREE-COMPATIBLE FIREBASE AUTHENTICATION HELPERS
+// 1. FREE-COMPATIBLE FIREBASE AUTHENTICATION & AUTHORIZATION HELPERS
 // --------------------------------------------------------------------------
 
-/**
- * Sign in Admin using official free Firebase Email & Password provider
- */
-export async function loginAdminWithPassword(email: string, pass: string): Promise<User> {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (normalizedEmail !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-    throw new Error(`Unauthorized Account: Only the authorized Super Admin (${SUPER_ADMIN_EMAIL}) is permitted.`);
-  }
-
-  const credential = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
-  await ensureAdminRecordInCloud(credential.user.uid).catch(() => null);
-  return credential.user;
+export interface AdminVerificationResult {
+  isAuthorized: boolean;
+  role: 'SUPER_ADMIN' | 'ADMIN';
+  name?: string;
+  email: string;
 }
 
 /**
- * Send free Firebase Password Reset email to the authorized admin Gmail
+ * Authoritatively verifies whether an authenticated Firebase user has admin rights.
+ * Checks against Owner email first, then queries the secure Firestore /admins/{uid} doc.
+ */
+export async function verifyUserAdminStatus(user: User): Promise<AdminVerificationResult> {
+  const userEmail = (user.email || '').trim().toLowerCase();
+
+  // 1. Website Owner check (Super Admin with full control)
+  if (isOwnerEmail(userEmail)) {
+    return {
+      isAuthorized: true,
+      role: 'SUPER_ADMIN',
+      name: user.displayName || 'Website Owner',
+      email: userEmail,
+    };
+  }
+
+  // 2. Query Firestore /admins/{uid} document
+  try {
+    const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+    if (adminSnap.exists()) {
+      const data = adminSnap.data();
+      const role = data.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN';
+      return {
+        isAuthorized: true,
+        role,
+        name: data.name || user.displayName || 'Authorized Administrator',
+        email: data.email || userEmail,
+      };
+    }
+  } catch (err) {
+    console.warn('Could not read admin authorization document:', err);
+  }
+
+  return {
+    isAuthorized: false,
+    role: 'ADMIN',
+    email: userEmail,
+  };
+}
+
+/**
+ * Sign in Admin using official free Firebase Email & Password provider.
+ * Supports ANY authorized administrator's individual email/password account.
+ */
+export async function loginAdminWithPassword(
+  email: string,
+  pass: string
+): Promise<{ user: User; role: 'SUPER_ADMIN' | 'ADMIN'; name?: string }> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const credential = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
+  const status = await verifyUserAdminStatus(credential.user);
+
+  if (!status.isAuthorized) {
+    await signOut(auth);
+    throw new Error(
+      `Access Denied: Account (${normalizedEmail}) is not authorized as an administrator. Only the website owner can grant administrator permissions.`
+    );
+  }
+
+  if (isOwnerEmail(normalizedEmail)) {
+    await ensureAdminRecordInCloud(credential.user.uid, normalizedEmail).catch(() => null);
+  }
+
+  return {
+    user: credential.user,
+    role: status.role,
+    name: status.name,
+  };
+}
+
+/**
+ * Send free Firebase Password Reset email to any administrator account
  */
 export async function sendAdminPasswordReset(email?: string): Promise<void> {
   const targetEmail = (email || SUPER_ADMIN_EMAIL).trim().toLowerCase();
@@ -140,19 +214,18 @@ export async function sendVerificationToAdmin(): Promise<void> {
 
 /**
  * Register initial Firebase Auth admin credentials (Free Email/Password provider)
- * Used if the admin account has not yet been registered in Firebase console
+ * Used if the owner admin account has not yet been registered in Firebase console
  */
 export async function registerInitialAdmin(email: string, pass: string): Promise<User> {
   const normalizedEmail = email.trim().toLowerCase();
-  if (normalizedEmail !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-    throw new Error(`Registration restricted: Only ${SUPER_ADMIN_EMAIL} can be provisioned as Super Admin.`);
+  if (!isOwnerEmail(normalizedEmail)) {
+    throw new Error(`Self-registration restricted: Only designated owner accounts (${SUPER_ADMIN_EMAIL}) can establish owner credentials.`);
   }
 
   const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, pass);
-  // Send email verification link automatically
   if (credential.user) {
     await sendEmailVerification(credential.user).catch(() => null);
-    await ensureAdminRecordInCloud(credential.user.uid).catch(() => null);
+    await ensureAdminRecordInCloud(credential.user.uid, normalizedEmail).catch(() => null);
   }
   return credential.user;
 }
@@ -160,17 +233,80 @@ export async function registerInitialAdmin(email: string, pass: string): Promise
 /**
  * Ensure the authenticated admin's UID exists in the /admins/{uid} collection
  */
-export async function ensureAdminRecordInCloud(uid: string): Promise<void> {
-  const path = `admins/${uid}`;
+export async function ensureAdminRecordInCloud(uid: string, email?: string): Promise<void> {
+  const adminEmail = (email || SUPER_ADMIN_EMAIL).toLowerCase().trim();
   try {
     await setDoc(doc(db, 'admins', uid), {
       id: uid,
       role: 'SUPER_ADMIN',
-      email: SUPER_ADMIN_EMAIL,
+      email: adminEmail,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
     console.warn('Admin record cloud provisioning note:', error);
+  }
+}
+
+// --------------------------------------------------------------------------
+// OWNER-ONLY ADMINISTRATOR MANAGEMENT (Cloud Firestore /admins)
+// --------------------------------------------------------------------------
+
+/**
+ * Fetch all registered administrator accounts from Firestore.
+ * Firestore Security Rules strictly restrict this to `isOwner()`.
+ */
+export async function fetchAuthorizedAdmins(): Promise<AdminRecord[]> {
+  const path = 'admins';
+  try {
+    const snap = await getDocs(collection(db, path));
+    const list: AdminRecord[] = [];
+    snap.forEach((d) => {
+      list.push(d.data() as AdminRecord);
+    });
+    return list;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+/**
+ * Authorize an administrator account in Firestore.
+ * Strictly enforced by Firestore rules: only the Website Owner can write to /admins/{uid}.
+ */
+export async function grantAdminAuthorization(admin: {
+  uid: string;
+  email: string;
+  role?: 'ADMIN' | 'SUPER_ADMIN';
+  name?: string;
+}): Promise<void> {
+  const path = `admins/${admin.uid}`;
+  try {
+    const payload: Record<string, unknown> = {
+      id: admin.uid,
+      email: admin.email.toLowerCase().trim(),
+      role: admin.role || 'ADMIN',
+      authorizedBy: auth.currentUser?.email || SUPER_ADMIN_EMAIL,
+      authorizedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (admin.name) payload.name = admin.name;
+
+    await setDoc(doc(db, 'admins', admin.uid), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Revoke an administrator's privileges in Firestore.
+ * Strictly enforced by Firestore rules: only the Website Owner can delete from /admins/{uid}.
+ */
+export async function revokeAdminAuthorization(adminUid: string): Promise<void> {
+  const path = `admins/${adminUid}`;
+  try {
+    await deleteDoc(doc(db, 'admins', adminUid));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 

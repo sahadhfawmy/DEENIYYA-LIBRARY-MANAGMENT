@@ -11,8 +11,6 @@ import {
   HelpCircle,
   Eye,
   EyeOff,
-  Zap,
-  RotateCcw,
   Send,
   UserCheck,
 } from 'lucide-react';
@@ -26,16 +24,14 @@ import {
   sendAdminPasswordReset,
   registerInitialAdmin,
   sendVerificationToAdmin,
+  verifyUserAdminStatus,
+  isOwnerEmail,
 } from '../lib/firebase';
 import {
-  sha256,
-  MASTER_PASSKEY_HASH,
-  BACKUP_PIN_HASH,
   getLockoutStatus,
   recordFailedLoginAttempt,
   resetLoginAttempts,
   LockoutStatus,
-  verifyAdminPasswordOrPin,
 } from '../lib/security';
 import { AuthSession } from '../types';
 
@@ -45,26 +41,15 @@ interface AdminLoginModalProps {
   onLoginSuccess: (session: AuthSession) => void;
 }
 
-const ACCEPTED_PASSKEY_HASHES = [
-  MASTER_PASSKEY_HASH,
-  BACKUP_PIN_HASH,
-  'a489f00d3d48e98e96507eeb772a6ec7cab8d50e43d4f6dc84ebda012cdc30b3', // Admin@Deeniya2026
-  '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', // 123456
-  '78033da557607023255672a6cc9ce5dbe95a90f921cd373fa66a42f9a6b8932e', // deeniya2026
-  '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', // admin123
-  '54658665f9b3d952c5d3a45b7caa771651eb3482fe5a7e9ab6bddcec39c01125', // dheeniyya2026
-];
-
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   isOpen,
   onClose,
   onLoginSuccess,
 }) => {
-  // Tabs: Official Firebase Email/Password, Google Sign-in, or Direct Master Passkey
-  const [tab, setTab] = useState<'firebase_password' | 'google' | 'passkey' | 'recover'>('firebase_password');
-  const [emailInput] = useState(SUPER_ADMIN_EMAIL);
+  // Navigation Tabs: Firebase Email/Password, Google Sign-in, or Password Reset
+  const [tab, setTab] = useState<'firebase_password' | 'google' | 'recover'>('firebase_password');
+  const [emailInput, setEmailInput] = useState(SUPER_ADMIN_EMAIL);
   const [passwordInput, setPasswordInput] = useState('');
-  const [passkeyInput, setPasskeyInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
   const [setupPasswordConfirm, setSetupPasswordConfirm] = useState('');
@@ -95,18 +80,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Finalize successful Super Admin session
-  const finalizeSuperAdminSession = (
+  // Finalize authenticated administrator session
+  const finalizeAdminSession = (
     email: string,
     uid: string,
+    role: 'SUPER_ADMIN' | 'ADMIN',
+    name: string,
     authMethod: string,
     emailVerified: boolean = true
   ) => {
     resetLoginAttempts();
     const session: AuthSession = {
-      role: 'SUPER_ADMIN',
-      email: SUPER_ADMIN_EMAIL,
-      name: 'Super Admin Librarian',
+      role,
+      email,
+      name,
       uid,
       token: 'dac_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
       loginAt: new Date().toISOString(),
@@ -117,7 +104,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
     if (!emailVerified) {
       setNeedsEmailVerification(true);
-      setSuccessMsg(`Authenticated via ${authMethod}. Note: Verification email sent to ${SUPER_ADMIN_EMAIL} for maximum security.`);
+      setSuccessMsg(`Authenticated via ${authMethod}. Note: Verification email sent to ${email} for maximum security.`);
       setTimeout(() => {
         onLoginSuccess(session);
         onClose();
@@ -136,9 +123,23 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    const targetEmail = emailInput.trim().toLowerCase();
+    if (!targetEmail) {
+      setErrorMsg('Please enter your administrator email address.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const user = await loginAdminWithPassword(emailInput, passwordInput);
-      finalizeSuperAdminSession(user.email || SUPER_ADMIN_EMAIL, user.uid, 'Firebase Password', user.emailVerified);
+      const result = await loginAdminWithPassword(targetEmail, passwordInput);
+      finalizeAdminSession(
+        result.user.email || targetEmail,
+        result.user.uid,
+        result.role,
+        result.name || 'Administrator',
+        'Firebase Password',
+        result.user.emailVerified
+      );
     } catch (err: unknown) {
       const errorCode = (err as any)?.code || '';
       const message = err instanceof Error ? err.message : String(err);
@@ -146,10 +147,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password') {
         const lockStatus = recordFailedLoginAttempt();
         setLockout(lockStatus);
-        setErrorMsg(`Incorrect Firebase password for ${SUPER_ADMIN_EMAIL}. ${lockStatus.remainingAttempts} attempt(s) remaining.`);
+        setErrorMsg(`Incorrect password for ${targetEmail}. ${lockStatus.remainingAttempts} attempt(s) remaining.`);
       } else if (errorCode === 'auth/user-not-found') {
-        setErrorMsg(`No Firebase password account registered yet for ${SUPER_ADMIN_EMAIL}. Use "First-Time Admin Setup" below to establish your password.`);
-        setIsFirstTimeSetup(true);
+        if (isOwnerEmail(targetEmail)) {
+          setErrorMsg(`No Firebase password account registered yet for owner ${targetEmail}. Use "First-Time Owner Setup" below to establish your password.`);
+          setIsFirstTimeSetup(true);
+        } else {
+          setErrorMsg(`No account found for ${targetEmail}. Please contact the library owner to be provisioned.`);
+        }
       } else if (errorCode === 'auth/too-many-requests') {
         setErrorMsg('Access temporarily paused due to repeated failed attempts. Please use Password Reset or try again later.');
       } else {
@@ -160,7 +165,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     }
   };
 
-  // 2. INITIAL ADMIN PASSWORD SETUP (FREE EMAIL/PASSWORD PROVIDER)
+  // 2. INITIAL OWNER PASSWORD SETUP (FREE EMAIL/PASSWORD PROVIDER)
   const handleInitialSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordInput.length < 6) {
@@ -179,7 +184,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     try {
       const user = await registerInitialAdmin(SUPER_ADMIN_EMAIL, passwordInput);
       setSuccessMsg(`Super Admin account registered in Firebase! Verification email sent to ${SUPER_ADMIN_EMAIL}.`);
-      finalizeSuperAdminSession(SUPER_ADMIN_EMAIL, user.uid, 'Initial Firebase Setup', false);
+      finalizeAdminSession(SUPER_ADMIN_EMAIL, user.uid, 'SUPER_ADMIN', 'Website Owner', 'Initial Firebase Setup', false);
     } catch (err: unknown) {
       const errorCode = (err as any)?.code || '';
       if (errorCode === 'auth/email-already-in-use') {
@@ -195,13 +200,19 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
   // 3. FREE PASSWORD RESET VIA FIREBASE
   const handlePasswordReset = async () => {
+    const targetEmail = (emailInput || SUPER_ADMIN_EMAIL).trim().toLowerCase();
+    if (!targetEmail) {
+      setErrorMsg('Please specify the administrator email address to send the password reset link to.');
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
     try {
-      await sendAdminPasswordReset(SUPER_ADMIN_EMAIL);
-      setSuccessMsg(`Password reset link sent to ${SUPER_ADMIN_EMAIL}! Check your inbox to set a new password.`);
+      await sendAdminPasswordReset(targetEmail);
+      setSuccessMsg(`Password reset link sent to ${targetEmail}! Check your inbox to set a new password.`);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to send password reset email');
     } finally {
@@ -213,7 +224,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   const handleResendVerification = async () => {
     try {
       await sendVerificationToAdmin();
-      setSuccessMsg(`Verification email re-sent to ${SUPER_ADMIN_EMAIL}!`);
+      setSuccessMsg(`Verification email re-sent to ${auth.currentUser?.email || SUPER_ADMIN_EMAIL}!`);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Could not send verification email');
     }
@@ -229,21 +240,27 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      const userEmail = (user.email || '').toLowerCase().trim();
+      const status = await verifyUserAdminStatus(user);
 
-      // STRICT SINGLE SUPER ADMIN ENFORCEMENT
-      if (userEmail !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+      if (!status.isAuthorized) {
         await signOut(auth);
         const lockStatus = recordFailedLoginAttempt();
         setLockout(lockStatus);
 
         setErrorMsg(
-          `Unauthorized Account: ${userEmail}. Only the authorized Super Admin (${SUPER_ADMIN_EMAIL}) is permitted.`
+          `Unauthorized Account: ${user.email}. This account has not been authorized by the website owner (${SUPER_ADMIN_EMAIL}).`
         );
         return;
       }
 
-      finalizeSuperAdminSession(userEmail, user.uid, 'Google Authentication', true);
+      finalizeAdminSession(
+        user.email || SUPER_ADMIN_EMAIL,
+        user.uid,
+        status.role,
+        status.name || 'Administrator',
+        'Google Authentication',
+        true
+      );
     } catch (err: unknown) {
       const errorCode = (err as any)?.code || '';
       const errorText = err instanceof Error ? err.message : String(err);
@@ -253,13 +270,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         errorText.includes('popup-closed-by-user') ||
         errorCode === 'auth/cancelled-popup-request'
       ) {
-        setErrorMsg('Google sign-in popup was closed. You can use your Firebase Admin Password tab above.');
+        setErrorMsg('Google sign-in popup was closed. You can use your Admin Password tab above.');
         setTab('firebase_password');
         return;
       }
 
       if (errorCode === 'auth/popup-blocked') {
-        setErrorMsg('Browser blocked popup window. Please allow popups or use Firebase Admin Password.');
+        setErrorMsg('Browser blocked popup window. Please allow popups or use Admin Password.');
         setTab('firebase_password');
         return;
       }
@@ -267,55 +284,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       setErrorMsg(errorText);
       const lockStatus = recordFailedLoginAttempt();
       setLockout(lockStatus);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 6. DIRECT MASTER PASSKEY / PIN (FALLBACK)
-  const handlePasskeySignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (lockout.isLocked) return;
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const rawPass = passkeyInput.trim();
-      const inputHash = await sha256(rawPass);
-
-      const isPassValid =
-        (await verifyAdminPasswordOrPin(rawPass)) ||
-        ACCEPTED_PASSKEY_HASHES.includes(inputHash) ||
-        rawPass === 'Admin@Deeniya2026' ||
-        rawPass === '123456' ||
-        rawPass === 'deeniya2026' ||
-        rawPass === 'admin123' ||
-        rawPass === 'dheeniyya2026';
-
-      if (!isPassValid) {
-        const lockStatus = recordFailedLoginAttempt();
-        setLockout(lockStatus);
-        setErrorMsg(`Invalid passkey. ${lockStatus.remainingAttempts} attempt(s) remaining.`);
-        return;
-      }
-
-      finalizeSuperAdminSession(SUPER_ADMIN_EMAIL, 'master-passkey-direct', 'Master Passkey', true);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Authentication failed');
-      const lockStatus = recordFailedLoginAttempt();
-      setLockout(lockStatus);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 1-Click Instant Login (Fallback)
-  const handleInstantAdminLogin = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      finalizeSuperAdminSession(SUPER_ADMIN_EMAIL, 'instant-admin-verified', 'Direct Super Admin Access', true);
     } finally {
       setLoading(false);
     }
@@ -332,7 +300,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold">Admin Security Portal</h2>
-              <p className="text-xs text-emerald-200">Deeniya Arabic College · Free Firebase Centralized Cloud</p>
+              <p className="text-xs text-emerald-200">Deeniya Arabic College · Centralized Cloud Authentication</p>
             </div>
           </div>
           <button
@@ -343,28 +311,14 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </button>
         </div>
 
-        {/* Lockout Warning Banner with Reset Option */}
+        {/* Lockout Warning Banner */}
         {lockout.isLocked && (
-          <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-3 flex items-center justify-between text-xs text-red-700 dark:text-red-400">
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 shrink-0 text-red-600 animate-pulse" />
-              <span>
-                Security Lockout: Retry in{' '}
-                <b>{Math.floor(lockout.remainingSeconds / 60)}m {lockout.remainingSeconds % 60}s</b>.
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                resetLoginAttempts();
-                setLockout(getLockoutStatus());
-                setErrorMsg(null);
-              }}
-              className="px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/60 text-red-800 dark:text-red-200 text-[10px] font-semibold hover:bg-red-200 flex items-center space-x-1"
-              title="Reset Lockout"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset</span>
-            </button>
+          <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-3 flex items-center space-x-2 text-xs text-red-700 dark:text-red-400">
+            <Clock className="w-4 h-4 shrink-0 text-red-600 animate-pulse" />
+            <span>
+              Security Lockout Active: Too many failed attempts. Please retry in{' '}
+              <b>{Math.floor(lockout.remainingSeconds / 60)}m {lockout.remainingSeconds % 60}s</b>.
+            </span>
           </div>
         )}
 
@@ -400,7 +354,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <button
               type="button"
               onClick={() => { setTab('firebase_password'); setErrorMsg(null); }}
-              className={`pb-2.5 px-2.5 border-b-2 transition flex items-center space-x-1.5 ${
+              className={`pb-2.5 px-3 border-b-2 transition flex items-center space-x-1.5 ${
                 tab === 'firebase_password'
                   ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400 font-bold'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -412,7 +366,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <button
               type="button"
               onClick={() => { setTab('google'); setErrorMsg(null); }}
-              className={`pb-2.5 px-2.5 border-b-2 transition flex items-center space-x-1.5 ${
+              className={`pb-2.5 px-3 border-b-2 transition flex items-center space-x-1.5 ${
                 tab === 'google'
                   ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400 font-bold'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -423,20 +377,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { setTab('passkey'); setErrorMsg(null); }}
-              className={`pb-2.5 px-2.5 border-b-2 transition flex items-center space-x-1.5 ${
-                tab === 'passkey'
-                  ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Master Passkey</span>
-            </button>
-            <button
-              type="button"
               onClick={() => { setTab('recover'); setErrorMsg(null); }}
-              className={`pb-2.5 px-2 border-b-2 transition flex items-center space-x-1 ${
+              className={`pb-2.5 px-3 border-b-2 transition flex items-center space-x-1.5 ${
                 tab === 'recover'
                   ? 'border-emerald-700 text-emerald-800 dark:text-emerald-400 font-bold'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -450,27 +392,29 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           {/* TAB 1: FREE FIREBASE EMAIL & PASSWORD LOGIN */}
           {tab === 'firebase_password' && (
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Single Authorized Super Admin</span>
-                  </span>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                    Spark Free
-                  </span>
-                </div>
-                <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">
-                  {SUPER_ADMIN_EMAIL}
-                </div>
-              </div>
-
               {!isFirstTimeSetup ? (
                 <form onSubmit={handleFirebasePasswordLogin} className="space-y-3">
                   <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Administrator Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="admin@example.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        className="w-full text-xs py-2 pl-9 pr-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-600 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Firebase Admin Password
+                        Password
                       </label>
                       <button
                         type="button"
@@ -487,7 +431,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
-                        placeholder="Enter your Firebase Admin password"
+                        placeholder="Enter your password"
                         value={passwordInput}
                         onChange={(e) => setPasswordInput(e.target.value)}
                         className="w-full text-xs py-2 pl-9 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-600 outline-none"
@@ -496,6 +440,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                        title={showPassword ? 'Hide password' : 'Show password'}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -508,24 +453,26 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                     className="w-full py-2.5 px-4 rounded-xl bg-emerald-800 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition flex items-center justify-center space-x-2"
                   >
                     <Shield className="w-4 h-4" />
-                    <span>{loading ? 'Authenticating with Firebase…' : 'Sign In as Super Admin'}</span>
+                    <span>{loading ? 'Authenticating with Firebase…' : 'Sign In as Administrator'}</span>
                   </button>
 
-                  <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => { setIsFirstTimeSetup(true); setErrorMsg(null); }}
-                      className="text-xs text-slate-500 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium"
-                    >
-                      First time using Firebase? <b className="underline">Initialize Admin Password</b>
-                    </button>
-                  </div>
+                  {isOwnerEmail(emailInput) && (
+                    <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => { setIsFirstTimeSetup(true); setErrorMsg(null); }}
+                        className="text-xs text-slate-500 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium"
+                      >
+                        First time using Firebase? <b className="underline">Initialize Owner Password</b>
+                      </button>
+                    </div>
+                  )}
                 </form>
               ) : (
                 <form onSubmit={handleInitialSetup} className="space-y-3 p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
                   <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center space-x-1.5">
                     <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>First-Time Setup: Set Your Firebase Password</span>
+                    <span>First-Time Setup: Set Owner Password</span>
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-300">
                     Create a secure password for <b className="font-mono">{SUPER_ADMIN_EMAIL}</b> in Firebase Authentication.
@@ -533,7 +480,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Choose New Admin Password (min 6 chars)
+                      Choose Owner Password (min 6 chars)
                     </label>
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -547,7 +494,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Confirm New Password
+                      Confirm Owner Password
                     </label>
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -565,7 +512,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                       disabled={loading || !passwordInput || !setupPasswordConfirm}
                       className="flex-1 py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition"
                     >
-                      {loading ? 'Creating Account…' : 'Activate Admin Password'}
+                      {loading ? 'Creating Account…' : 'Activate Owner Password'}
                     </button>
                     <button
                       type="button"
@@ -585,10 +532,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
                 <div className="font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center space-x-1.5">
-                  <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Google Account Verification</span>
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Verified Google Account Access</span>
                 </div>
-                Sign in with the designated Google account: <b className="font-mono text-emerald-700 dark:text-emerald-400">{SUPER_ADMIN_EMAIL}</b>. 100% free via official Firebase Google Auth.
+                Sign in with your authorized Google account. Firebase securely validates administrator permissions against cloud records.
               </div>
 
               <button
@@ -623,92 +570,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   onClick={() => setTab('firebase_password')}
                   className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold hover:underline"
                 >
-                  ← Prefer Firebase email & password? Click here
+                  ← Prefer email & password? Click here
                 </button>
               </div>
             </div>
           )}
 
-          {/* TAB 3: DIRECT MASTER PASSKEY / PIN (EMERGENCY) */}
-          {tab === 'passkey' && (
-            <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center space-x-1.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Instant Super Admin Access</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-mono font-semibold">
-                    Zero Latency
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleInstantAdminLogin}
-                  disabled={loading || lockout.isLocked}
-                  className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-sm hover:shadow transition active:scale-98 disabled:opacity-50"
-                >
-                  <Shield className="w-4 h-4 text-amber-300" />
-                  <span>{loading ? 'Authenticating…' : '⚡ 1-Click Super Admin Login'}</span>
-                </button>
-              </div>
-
-              <form onSubmit={handlePasskeySignIn} className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Master Passkey or PIN
-                    </label>
-                    <div className="flex items-center space-x-1.5 text-[10px]">
-                      <button
-                        type="button"
-                        onClick={() => setPasskeyInput('Admin@Deeniya2026')}
-                        className="text-emerald-600 dark:text-emerald-400 hover:underline"
-                      >
-                        Fill Passkey
-                      </button>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <button
-                        type="button"
-                        onClick={() => setPasskeyInput('123456')}
-                        className="text-emerald-600 dark:text-emerald-400 hover:underline"
-                      >
-                        Fill PIN (123456)
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      placeholder="Enter passkey or PIN"
-                      value={passkeyInput}
-                      onChange={(e) => setPasskeyInput(e.target.value)}
-                      className="w-full text-xs py-2 pl-9 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-600 outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || lockout.isLocked || !passkeyInput}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition"
-                >
-                  {loading ? 'Verifying…' : 'Authenticate via Master Credentials'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 4: PASSWORD RESET VIA FIREBASE FREE EMAIL */}
+          {/* TAB 3: PASSWORD RESET VIA FIREBASE FREE EMAIL */}
           {tab === 'recover' && (
             <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
               <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl">
@@ -716,30 +584,39 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   <Send className="w-4 h-4 text-emerald-600" />
                   <span>Free Firebase Password Reset</span>
                 </div>
-                Firebase will automatically send a secure password reset link to your verified Gmail: <b className="font-mono">{SUPER_ADMIN_EMAIL}</b>. 100% free under the Firebase Spark plan.
+                Firebase will automatically send a secure password reset link to your email address. 100% free under the Firebase Spark plan.
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Administrator Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="admin@example.com"
+                  className="w-full text-xs py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
               </div>
 
               <button
                 type="button"
                 onClick={handlePasswordReset}
-                disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition flex items-center justify-center space-x-2"
+                disabled={loading || !emailInput}
+                className="w-full py-2.5 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition flex items-center justify-center space-x-2 disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{loading ? 'Sending Reset Email…' : 'Send Password Reset Email'}</span>
               </button>
-
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 font-mono text-[11px] space-y-1">
-                <div><b>Emergency Passkey:</b> Admin@Deeniya2026</div>
-                <div><b>Emergency PIN:</b> 123456</div>
-              </div>
             </div>
           )}
 
           {/* Security policy notice */}
           <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Free Spark Plan Centralized Cloud</span>
-            <span>Single-Admin RBAC</span>
+            <span>Free Centralized Cloud Auth</span>
+            <span>Role-Based Access Control</span>
           </div>
         </div>
       </div>

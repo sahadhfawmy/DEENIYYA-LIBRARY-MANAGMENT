@@ -1,4 +1,15 @@
-export type UserRole = 'SUPER_ADMIN' | 'PUBLIC';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'PUBLIC';
+
+export interface AdminRecord {
+  id: string; // Firebase Auth UID
+  email: string;
+  role: 'ADMIN' | 'SUPER_ADMIN';
+  name?: string;
+  authorizedBy?: string;
+  authorizedAt?: string;
+  updatedAt?: string;
+}
+
 
 export interface Book {
   id: string;

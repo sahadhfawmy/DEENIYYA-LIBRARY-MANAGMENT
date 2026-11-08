@@ -24,11 +24,18 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Super Admin privilege gate: authorized admin email or explicit admin registry
-    function isSuperAdmin() {
+    // Website Owner: Only the designated website owner can authorize or revoke administrators
+    function isOwner() {
       return isSignedIn() && (
-        request.auth.token.email == "dheeniyyalibrarymanagement@gmail.com" ||
         request.auth.token.email.lower() == "dheeniyyalibrarymanagement@gmail.com" ||
+        request.auth.token.email.lower() == "fawmysahadh90@gmail.com"
+      );
+    }
+
+    // Authorized Admin: Either the Owner or an account explicitly registered in /admins/{uid} by the Owner
+    function isAuthorizedAdmin() {
+      return isSignedIn() && (
+        isOwner() ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -118,58 +125,70 @@ service cloud.firestore {
         (!('tz' in data) || (data.tz is string && data.tz.size() <= 50));
     }
 
+    function isValidAdminDoc(data) {
+      return data.keys().hasAll(['id', 'email', 'role']) &&
+        data.keys().hasOnly(['id', 'email', 'role', 'authorizedBy', 'authorizedAt', 'name', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.email is string && data.email.size() <= 200 &&
+        data.role in ['ADMIN', 'SUPER_ADMIN'];
+    }
+
     // 4. Collection Rules
 
-    // Books: Public can read for searching catalog; ONLY Super Admin can write
+    // Books: Public can read for searching catalog; ONLY Authorized Admin can write
     match /books/{bookId} {
       allow get, list: if true;
-      allow create: if isSuperAdmin() && isValidId(bookId) && isValidBook(incoming());
-      allow update: if isSuperAdmin() && isValidId(bookId) && isValidBook(incoming()) && incoming().id == existing().id;
-      allow delete: if isSuperAdmin() && isValidId(bookId);
+      allow create: if isAuthorizedAdmin() && isValidId(bookId) && isValidBook(incoming());
+      allow update: if isAuthorizedAdmin() && isValidId(bookId) && isValidBook(incoming()) && incoming().id == existing().id;
+      allow delete: if isAuthorizedAdmin() && isValidId(bookId);
     }
 
-    // Book Copies: Public can read inventory status; ONLY Super Admin can write
+    // Book Copies: Public can read inventory status; ONLY Authorized Admin can write
     match /copies/{copyId} {
       allow get, list: if true;
-      allow create: if isSuperAdmin() && isValidId(copyId) && isValidBookCopy(incoming());
-      allow update: if isSuperAdmin() && isValidId(copyId) && isValidBookCopy(incoming()) && incoming().id == existing().id;
-      allow delete: if isSuperAdmin() && isValidId(copyId);
+      allow create: if isAuthorizedAdmin() && isValidId(copyId) && isValidBookCopy(incoming());
+      allow update: if isAuthorizedAdmin() && isValidId(copyId) && isValidBookCopy(incoming()) && incoming().id == existing().id;
+      allow delete: if isAuthorizedAdmin() && isValidId(copyId);
     }
 
-    // Students: STRICT PII PRIVACY. Only verified Super Admin can read or write
+    // Students: STRICT PII PRIVACY. Only verified Authorized Admin can read or write
     match /students/{studentId} {
-      allow get, list: if isSuperAdmin();
-      allow create: if isSuperAdmin() && isValidId(studentId) && isValidStudent(incoming());
-      allow update: if isSuperAdmin() && isValidId(studentId) && isValidStudent(incoming()) && incoming().id == existing().id;
-      allow delete: if isSuperAdmin() && isValidId(studentId);
+      allow get, list: if isAuthorizedAdmin();
+      allow create: if isAuthorizedAdmin() && isValidId(studentId) && isValidStudent(incoming());
+      allow update: if isAuthorizedAdmin() && isValidId(studentId) && isValidStudent(incoming()) && incoming().id == existing().id;
+      allow delete: if isAuthorizedAdmin() && isValidId(studentId);
     }
 
-    // Loans: Student borrowing privacy. Only verified Super Admin can read or write
+    // Loans: Student borrowing privacy. Only verified Authorized Admin can read or write
     match /loans/{loanId} {
-      allow get, list: if isSuperAdmin();
-      allow create: if isSuperAdmin() && isValidId(loanId) && isValidLoan(incoming());
-      allow update: if isSuperAdmin() && isValidId(loanId) && isValidLoan(incoming()) && incoming().id == existing().id;
-      allow delete: if isSuperAdmin() && isValidId(loanId);
+      allow get, list: if isAuthorizedAdmin();
+      allow create: if isAuthorizedAdmin() && isValidId(loanId) && isValidLoan(incoming());
+      allow update: if isAuthorizedAdmin() && isValidId(loanId) && isValidLoan(incoming()) && incoming().id == existing().id;
+      allow delete: if isAuthorizedAdmin() && isValidId(loanId);
     }
 
-    // Security Logs: Audit trail. Read by Super Admin; Create by Super Admin; Immutable (no update/delete)
+    // Security Logs: Audit trail. Read & Created by Authorized Admin; Immutable (no update/delete)
     match /security_logs/{logId} {
-      allow get, list: if isSuperAdmin();
-      allow create: if isSuperAdmin() && isValidId(logId) && isValidSecurityLog(incoming());
+      allow get, list: if isAuthorizedAdmin();
+      allow create: if isAuthorizedAdmin() && isValidId(logId) && isValidSecurityLog(incoming());
       allow update, delete: if false;
     }
 
-    // Admin Profiles: Managed only by Super Admin
+    // Admin Profiles: OWNER-ONLY MANAGEMENT.
+    // Ordinary users CANNOT grant themselves administrator privileges!
     match /admins/{adminUid} {
-      allow get: if isSuperAdmin();
-      allow create, update, delete: if isSuperAdmin() && isValidId(adminUid);
+      allow get: if isSignedIn() && (request.auth.uid == adminUid || isOwner());
+      allow list: if isOwner();
+      allow create: if isOwner() && isValidId(adminUid) && isValidAdminDoc(incoming()) && incoming().id == adminUid;
+      allow update: if isOwner() && isValidId(adminUid) && isValidAdminDoc(incoming()) && incoming().id == existing().id;
+      allow delete: if isOwner() && isValidId(adminUid);
     }
 
-    // System Settings: Public can read general info; ONLY Super Admin can modify
+    // System Settings: Public can read general info; ONLY Authorized Admin can modify
     match /system_settings/{settingId} {
       allow get: if true;
-      allow create, update: if isSuperAdmin() && isValidId(settingId) && isValidSystemSettings(incoming());
-      allow delete: if isSuperAdmin() && isValidId(settingId);
+      allow create, update: if isAuthorizedAdmin() && isValidId(settingId) && isValidSystemSettings(incoming());
+      allow delete: if isAuthorizedAdmin() && isValidId(settingId);
     }
   }
 }

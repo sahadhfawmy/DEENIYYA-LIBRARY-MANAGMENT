@@ -1,7 +1,28 @@
-import React, { useState } from 'react';
-import { Settings, Save, Shield, CheckCircle2, ShieldAlert, Palette, Cloud, RefreshCw, Smartphone, Laptop } from 'lucide-react';
-import { LibrarySettings } from '../types';
+import React, { useState, useEffect } from 'react';
+import {
+  Settings,
+  Save,
+  Shield,
+  CheckCircle2,
+  ShieldAlert,
+  Palette,
+  Cloud,
+  RefreshCw,
+  Smartphone,
+  Laptop,
+  UserCheck,
+  UserPlus,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react';
+import { LibrarySettings, AuthSession, AdminRecord } from '../types';
 import { SUPER_ADMIN_EMAIL } from '../lib/security';
+import {
+  isOwnerEmail,
+  fetchAuthorizedAdmins,
+  grantAdminAuthorization,
+  revokeAdminAuthorization,
+} from '../lib/firebase';
 import {
   LUXURY_THEMES,
   LuxuryThemeId,
@@ -12,6 +33,7 @@ import {
 interface SettingsTabProps {
   settings: LibrarySettings;
   isSuperAdmin: boolean;
+  session?: AuthSession;
   onSaveSettings: (settings: LibrarySettings) => Promise<void>;
   onOpenLogin: () => void;
   activeThemeId?: LuxuryThemeId;
@@ -23,6 +45,7 @@ interface SettingsTabProps {
 export const SettingsTab: React.FC<SettingsTabProps> = ({
   settings,
   isSuperAdmin,
+  session,
   onSaveSettings,
   onOpenLogin,
   activeThemeId,
@@ -34,6 +57,78 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTheme, setActiveTheme] = useState<LuxuryThemeId>(() => activeThemeId || getActiveThemeId());
+
+  // Owner Admin Management State
+  const isOwner = isOwnerEmail(session?.email);
+  const [adminsList, setAdminsList] = useState<AdminRecord[]>([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [adminActionError, setAdminActionError] = useState<string | null>(null);
+  const [adminActionSuccess, setAdminActionSuccess] = useState<string | null>(null);
+  const [newAdminUid, setNewAdminUid] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminRole, setNewAdminRole] = useState<'ADMIN' | 'SUPER_ADMIN'>('ADMIN');
+  const [isAddingAdmin, setIsAddingAdmin] = useState(false);
+
+  // Load admins list if current user is the Owner
+  useEffect(() => {
+    if (!isOwner) return;
+    loadAdmins();
+  }, [isOwner]);
+
+  const loadAdmins = async () => {
+    setLoadingAdmins(true);
+    try {
+      const list = await fetchAuthorizedAdmins();
+      setAdminsList(list);
+    } catch (err) {
+      console.warn('Admins list fetch notice:', err);
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
+
+  const handleGrantAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminUid.trim() || !newAdminEmail.trim()) {
+      setAdminActionError('Please provide both the Firebase Auth UID and Email.');
+      return;
+    }
+    setAdminActionError(null);
+    setAdminActionSuccess(null);
+    setIsAddingAdmin(true);
+
+    try {
+      await grantAdminAuthorization({
+        uid: newAdminUid.trim(),
+        email: newAdminEmail.trim().toLowerCase(),
+        name: newAdminName.trim() || undefined,
+        role: newAdminRole,
+      });
+      setAdminActionSuccess(`Administrator authorization granted to ${newAdminEmail}!`);
+      setNewAdminUid('');
+      setNewAdminEmail('');
+      setNewAdminName('');
+      await loadAdmins();
+    } catch (err: unknown) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to authorize administrator');
+    } finally {
+      setIsAddingAdmin(false);
+    }
+  };
+
+  const handleRevokeAdmin = async (uid: string, email: string) => {
+    if (!window.confirm(`Revoke administrator authorization for ${email}? This account will lose all admin permissions immediately.`)) {
+      return;
+    }
+    try {
+      await revokeAdminAuthorization(uid);
+      setAdminActionSuccess(`Revoked authorization for ${email}.`);
+      await loadAdmins();
+    } catch (err: unknown) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to revoke administrator');
+    }
+  };
 
   const handleSelectTheme = (themeId: LuxuryThemeId) => {
     setActiveTheme(themeId);
@@ -48,7 +143,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       <div className="p-8 max-w-lg mx-auto text-center space-y-4 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-lg mt-8">
         <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
         <h3 className="text-lg font-bold text-slate-900 dark:text-white">Settings Restricted</h3>
-        <p className="text-xs text-slate-500">Institution settings and parameters can only be configured by the verified Super Admin.</p>
+        <p className="text-xs text-slate-500">Institution settings and parameters can only be configured by verified administrators.</p>
         <button onClick={onOpenLogin} className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md">
           Admin Login · تسجيل الدخول
         </button>
@@ -135,7 +230,169 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Institution Settings Card */}
+      {/* 2. Owner-Only Authorized Administrators Management */}
+      {isOwner && (
+        <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-emerald-300 dark:border-emerald-800 shadow-sm space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Authorized Administrators Management · إدارة المشرفين
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Owner-Only Access Control. Enforced authoritatively by Firestore Security Rules.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold">
+              Owner Privileges
+            </span>
+          </div>
+
+          {adminActionError && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 text-xs text-red-700 dark:text-red-300 rounded-xl flex items-start space-x-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+              <span>{adminActionError}</span>
+            </div>
+          )}
+
+          {adminActionSuccess && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 text-xs text-emerald-700 dark:text-emerald-300 rounded-xl flex items-start space-x-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              <span>{adminActionSuccess}</span>
+            </div>
+          )}
+
+          {/* List of Registered Administrators */}
+          <div>
+            <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
+              <span>Cloud Registered Administrators ({adminsList.length})</span>
+              <button
+                type="button"
+                onClick={loadAdmins}
+                disabled={loadingAdmins}
+                className="text-[11px] text-emerald-600 hover:underline flex items-center space-x-1"
+              >
+                <RefreshCw className={`w-3 h-3 ${loadingAdmins ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {adminsList.map((admin) => (
+                <div
+                  key={admin.id}
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
+                      <span>{admin.email}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-mono font-bold">
+                        {admin.role}
+                      </span>
+                    </div>
+                    <div className="font-mono text-[10px] text-slate-400">UID: {admin.id}</div>
+                  </div>
+                  {admin.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && (
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeAdmin(admin.id, admin.email)}
+                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 transition"
+                      title="Revoke Admin Access"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Form to Authorize a New Administrator */}
+          <form onSubmit={handleGrantAdmin} className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3 text-xs">
+            <div className="font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
+              <UserPlus className="w-4 h-4 text-emerald-600" />
+              <span>Authorize New Administrator</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Only you (the Website Owner) have cryptographic permission in Firestore Security Rules to write to the <code className="font-mono text-emerald-600">/admins</code> collection.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Firebase Auth UID
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. cZ4wv65a7UgS9xHRp0Y..."
+                  value={newAdminUid}
+                  onChange={(e) => setNewAdminUid(e.target.value)}
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Administrator Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="admin@example.com"
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Admin Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Associate Librarian"
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Role
+                </label>
+                <select
+                  value={newAdminRole}
+                  onChange={(e) => setNewAdminRole(e.target.value as 'ADMIN' | 'SUPER_ADMIN')}
+                  className="w-full py-1.5 px-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                >
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isAddingAdmin || !newAdminUid || !newAdminEmail}
+              className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 disabled:opacity-50"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>{isAddingAdmin ? 'Authorizing in Cloud Firestore…' : 'Authorize Administrator in Firestore'}</span>
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* 3. Institution Settings Card */}
       <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
         <div className="flex items-center space-x-3 pb-3 border-b border-slate-100 dark:border-slate-700">
           <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
@@ -248,7 +505,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </form>
       </div>
 
-      {/* 3. Luxury Website Themes & Appearance Customization */}
+      {/* 4. Luxury Website Themes & Appearance Customization */}
       <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
           <div className="flex items-center space-x-2">
