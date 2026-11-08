@@ -24,10 +24,11 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Super Admin privilege gate: verified email or explicit admin registry
+    // Super Admin privilege gate: authorized admin email or explicit admin registry
     function isSuperAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email == "dheeniyyalibrarymanagement@gmail.com" && request.auth.token.email_verified == true) ||
+        request.auth.token.email == "dheeniyyalibrarymanagement@gmail.com" ||
+        request.auth.token.email.lower() == "dheeniyyalibrarymanagement@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }

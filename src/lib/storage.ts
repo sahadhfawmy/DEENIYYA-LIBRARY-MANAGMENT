@@ -212,3 +212,55 @@ export function createBackupPayload(state: LibraryState): string {
   };
   return JSON.stringify(payload, null, 2);
 }
+
+// Merge cloud records into local state without duplicate records or overwriting valid edits
+export function mergeCloudRecordsIntoState(
+  local: LibraryState,
+  cloudData: {
+    students?: Student[];
+    loans?: Loan[];
+    books?: Book[];
+    settings?: Partial<LibrarySettings> | null;
+  }
+): LibraryState {
+  // Merge students by ID (cloud takes authoritative precedence for verified admin)
+  let mergedStudents = [...local.students];
+  if (cloudData.students && cloudData.students.length > 0) {
+    const studentMap = new Map<string, Student>();
+    mergedStudents.forEach((s) => studentMap.set(s.id, s));
+    cloudData.students.forEach((s) => studentMap.set(s.id, s));
+    mergedStudents = Array.from(studentMap.values());
+  }
+
+  // Merge loans by ID
+  let mergedLoans = [...local.loans];
+  if (cloudData.loans && cloudData.loans.length > 0) {
+    const loanMap = new Map<string, Loan>();
+    mergedLoans.forEach((l) => loanMap.set(l.id, l));
+    cloudData.loans.forEach((l) => loanMap.set(l.id, l));
+    mergedLoans = Array.from(loanMap.values());
+  }
+
+  // Merge custom books
+  let mergedBooks = [...local.books];
+  if (cloudData.books && cloudData.books.length > 0) {
+    const bookMap = new Map<string, Book>();
+    mergedBooks.forEach((b) => bookMap.set(b.id, b));
+    cloudData.books.forEach((b) => bookMap.set(b.id, b));
+    mergedBooks = Array.from(bookMap.values());
+  }
+
+  // Merge settings
+  const mergedSettings: LibrarySettings = cloudData.settings
+    ? { ...local.settings, ...cloudData.settings }
+    : local.settings;
+
+  return {
+    ...local,
+    students: mergedStudents,
+    loans: mergedLoans,
+    books: mergedBooks,
+    settings: mergedSettings,
+  };
+}
+

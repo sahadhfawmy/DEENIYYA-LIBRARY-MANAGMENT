@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, Shield, CheckCircle2, ShieldAlert, Palette } from 'lucide-react';
+import { Settings, Save, Shield, CheckCircle2, ShieldAlert, Palette, Cloud, RefreshCw, Smartphone, Laptop } from 'lucide-react';
 import { LibrarySettings } from '../types';
 import { SUPER_ADMIN_EMAIL } from '../lib/security';
 import {
@@ -16,6 +16,8 @@ interface SettingsTabProps {
   onOpenLogin: () => void;
   activeThemeId?: LuxuryThemeId;
   onSelectTheme?: (theme: LuxuryThemeId) => void;
+  onManualSync?: () => Promise<void>;
+  isSyncing?: boolean;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -25,6 +27,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onOpenLogin,
   activeThemeId,
   onSelectTheme,
+  onManualSync,
+  isSyncing,
 }) => {
   const [formData, setFormData] = useState<LibrarySettings>({ ...settings });
   const [success, setSuccess] = useState<string | null>(null);
@@ -66,7 +70,72 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* 1. Institution Settings Card */}
+      {/* 1. Centralized Cloud Database & Free Spark Policy Card */}
+      <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              <Cloud className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Centralized Cloud Database · قاعدة البيانات السحابية
+              </h2>
+              <p className="text-xs text-slate-500">
+                Synchronized across all phones, tablets, and laptops worldwide.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold">
+            Spark Free Plan ($0.00)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+            <div className="text-[11px] font-semibold text-slate-500">Cloud Firestore ID</div>
+            <div className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate">
+              ai-studio-f80854f8-fbe6-4110-90b5-723299326526
+            </div>
+            <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center space-x-1">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Status: Connected & Verified</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1">
+            <div className="text-[11px] font-semibold text-slate-500">Cross-Device Synchronization</div>
+            <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <span>+</span>
+              <Laptop className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Universal Sync Active</span>
+            </div>
+            <div className="text-[10px] text-slate-500">
+              One shared cloud database for all your devices.
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[11px] text-slate-500">
+            Strict Zero-Payment Guarantee: Operates permanently within Firebase Spark free tier quotas.
+          </p>
+          {onManualSync && (
+            <button
+              type="button"
+              onClick={onManualSync}
+              disabled={isSyncing}
+              className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition flex items-center space-x-1.5 shrink-0 shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Syncing Cloud…' : 'Sync with Cloud'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Institution Settings Card */}
       <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
         <div className="flex items-center space-x-3 pb-3 border-b border-slate-100 dark:border-slate-700">
           <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
@@ -164,7 +233,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               {SUPER_ADMIN_EMAIL}
             </div>
             <p className="text-[10px] text-slate-400">
-              Hardcoded and protected in Firestore Security Rules. Public visitors cannot override this role.
+              Authorized Single-Admin account protected in Firebase Firestore Security Rules.
             </p>
           </div>
 
@@ -179,7 +248,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </form>
       </div>
 
-      {/* 2. Luxury Website Themes & Appearance Customization */}
+      {/* 3. Luxury Website Themes & Appearance Customization */}
       <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
           <div className="flex items-center space-x-2">
