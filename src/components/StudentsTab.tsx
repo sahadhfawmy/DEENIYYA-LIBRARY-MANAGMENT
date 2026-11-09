@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Student, LibrarySettings } from '../types';
 import { mt, sanitizeInput } from '../lib/security';
-import { downloadStudentIdCardImage, printSingleStudentIdCard } from '../lib/idCardRenderer';
+import { downloadStudentIdCardImage, downloadStudentIdCardPdf, printSingleStudentIdCard } from '../lib/idCardRenderer';
 
 interface StudentsTabProps {
   students: Student[];
@@ -651,13 +651,13 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     className="px-3 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center space-x-1 transition"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>Download ID (PNG)</span>
+                    <span>Download (PNG)</span>
                   </button>
                   <button
-                    onClick={() => downloadStudentIdCardImage(viewingProfile, settings, 'jpeg')}
-                    className="px-2.5 py-1.5 rounded-xl border border-emerald-700 text-emerald-800 dark:text-emerald-300 font-semibold text-xs flex items-center space-x-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                    onClick={() => downloadStudentIdCardPdf(viewingProfile, settings, '3K')}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-semibold text-xs flex items-center space-x-1 transition"
                   >
-                    <span>JPG</span>
+                    <span>PDF (16:9)</span>
                   </button>
                   <button
                     onClick={() => printSingleStudentIdCard(viewingProfile, settings)}

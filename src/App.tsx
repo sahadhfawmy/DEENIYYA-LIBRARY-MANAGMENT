@@ -58,6 +58,7 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { PrintablePdfModal, ReportType } from './components/PrintablePdfModal';
 import { BookEditModal } from './components/BookEditModal';
 import { GeminiChatbot } from './components/GeminiChatbot';
+import { StudentVerificationModal } from './components/StudentVerificationModal';
 import {
   LuxuryThemeId,
   getActiveThemeId,
@@ -128,6 +129,33 @@ export default function App() {
     students: [],
     filterLabel: 'All Records',
   });
+
+  // QR Code Student Pass Verification Modal State
+  const [verificationModal, setVerificationModal] = useState<{
+    isOpen: boolean;
+    student: Student | null;
+    verificationId: string;
+  }>({
+    isOpen: false,
+    student: null,
+    verificationId: '',
+  });
+
+  // Check URL query parameters for ?verify=STU-xxxx (from scanned physical/digital ID cards)
+  useEffect(() => {
+    if (!dataLoaded) return;
+    const params = new URLSearchParams(window.location.search);
+    const verifyId = params.get('verify');
+    if (verifyId) {
+      const targetId = verifyId.trim().toLowerCase();
+      const matched = students.find((s) => s.id.toLowerCase() === targetId) || null;
+      setVerificationModal({
+        isOpen: true,
+        student: matched,
+        verificationId: verifyId,
+      });
+    }
+  }, [dataLoaded, students]);
 
   // 1. Initial Data Loading (5,869 books + 10,492 copies)
   useEffect(() => {
@@ -1028,6 +1056,15 @@ export default function App() {
         copies={copies}
         onClose={() => setEditingBook(null)}
         onSave={handleUpdateBook}
+      />
+
+      {/* Official Student Digital Pass Verification Modal */}
+      <StudentVerificationModal
+        isOpen={verificationModal.isOpen}
+        onClose={() => setVerificationModal((prev) => ({ ...prev, isOpen: false }))}
+        student={verificationModal.student}
+        settings={settings}
+        verificationId={verificationModal.verificationId}
       />
 
       {/* Floating Gemini AI Scholar Chat Widget Button & Drawer */}
