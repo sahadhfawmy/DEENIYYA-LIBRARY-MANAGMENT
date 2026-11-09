@@ -4,6 +4,7 @@ import { Student, LibrarySettings } from '../types';
 import { COLLEGE_LOGO } from '../data/logo';
 
 export type CardResolution = 'HD' | '2K' | '3K';
+export type CardPrintTheme = 'emerald-gold' | 'print-clean' | 'royal-gold';
 
 export interface ResolutionConfig {
   width: number;
@@ -35,7 +36,9 @@ export const RESOLUTION_PRESETS: Record<CardResolution, ResolutionConfig> = {
 
 export interface RenderCardOptions {
   resolution?: CardResolution;
+  theme?: CardPrintTheme;
   format?: 'png' | 'jpeg';
+  includeCutGuides?: boolean;
 }
 
 /**
@@ -76,12 +79,19 @@ function drawIslamicStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
 /**
  * Draws ornate Islamic corner brackets in gold
  */
-function drawCornerBracket(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, angleDeg: number, goldGrad: CanvasGradient | string) {
+function drawCornerBracket(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  angleDeg: number,
+  goldGrad: CanvasGradient | string
+) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate((angleDeg * Math.PI) / 180);
   ctx.strokeStyle = goldGrad;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3.5;
   ctx.beginPath();
   ctx.moveTo(0, size);
   ctx.lineTo(0, 0);
@@ -89,31 +99,19 @@ function drawCornerBracket(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.stroke();
 
   // Subtle interior diagonal
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(size * 0.4, 0);
-  ctx.lineTo(0, size * 0.4);
+  ctx.moveTo(size * 0.45, 0);
+  ctx.lineTo(0, size * 0.45);
   ctx.stroke();
 
   ctx.restore();
 }
 
 /**
- * Formats date consistently: YYYY-MM-DD or standard readable without inventing values
- */
-function formatValidDate(dateStr?: string): string {
-  if (!dateStr || !dateStr.trim()) return '';
-  const clean = dateStr.trim();
-  if (clean === '-' || clean === '—' || clean === 'N/A' || clean === 'null' || clean === 'undefined') {
-    return '';
-  }
-  return clean;
-}
-
-/**
  * Checks if a string has actual non-dash, non-placeholder content
  */
-function getValidValue(val?: string): string {
+export function getValidValue(val?: string): string {
   if (!val || typeof val !== 'string') return '';
   const trimmed = val.trim();
   if (
@@ -130,7 +128,19 @@ function getValidValue(val?: string): string {
 }
 
 /**
- * Draws image with 'cover' fitting into [x, y, w, h]
+ * Formats date consistently: YYYY-MM-DD without inventing values
+ */
+export function formatValidDate(dateStr?: string): string {
+  if (!dateStr || !dateStr.trim()) return '';
+  const clean = dateStr.trim();
+  if (clean === '-' || clean === '—' || clean === 'N/A' || clean === 'null' || clean === 'undefined') {
+    return '';
+  }
+  return clean;
+}
+
+/**
+ * Draws image with 'cover' fitting into [x, y, w, h] preserving aspect ratio
  */
 function drawImageProp(
   ctx: CanvasRenderingContext2D,
@@ -151,11 +161,9 @@ function drawImageProp(
   let renderY = y;
 
   if (imgRatio > targetRatio) {
-    // Source image is wider
     renderW = h * imgRatio;
     renderX = x - (renderW - w) / 2;
   } else {
-    // Source image is taller
     renderH = w / imgRatio;
     renderY = y - (renderH - h) / 2;
   }
@@ -165,7 +173,7 @@ function drawImageProp(
 
 /**
  * Main Canvas Renderer: Generates a 16:9 Landscape Student Digital ID Card
- * at HD (1920x1080), 2K (2560x1440), or 3K Ultra HD (3072x1728).
+ * with LARGE, HIGH-CONTRAST, PRINT-FRIENDLY TYPOGRAPHY and customizable theme.
  */
 export async function renderStudentIdCardCanvas(
   student: Student,
@@ -173,6 +181,7 @@ export async function renderStudentIdCardCanvas(
   options: RenderCardOptions = {}
 ): Promise<HTMLCanvasElement> {
   const resKey: CardResolution = options.resolution || '3K';
+  const cardTheme: CardPrintTheme = options.theme || 'emerald-gold';
   const config = RESOLUTION_PRESETS[resKey] || RESOLUTION_PRESETS['3K'];
   const width = config.width;
   const height = config.height;
@@ -180,7 +189,7 @@ export async function renderStudentIdCardCanvas(
   // Scale factor relative to 1920x1080 baseline
   const s = width / 1920;
 
-  // Make sure fonts are loaded in document if possible
+  // Make sure document fonts are loaded if available
   if (typeof document !== 'undefined' && 'fonts' in document) {
     try {
       await document.fonts.ready;
@@ -195,12 +204,14 @@ export async function renderStudentIdCardCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get 2D canvas context');
 
-  // Anti-aliasing quality
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  // Rounded outer boundary for physical card feel
-  const outerRadius = 40 * s;
+  // Determine colors based on print theme
+  const isPrintClean = cardTheme === 'print-clean';
+
+  // 1. Base Layer & Background
+  const outerRadius = 36 * s;
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(outerRadius, 0);
@@ -215,67 +226,93 @@ export async function renderStudentIdCardCanvas(
   ctx.closePath();
   ctx.clip();
 
-  // 1. Base Layer: Imperial Emerald Gradient
-  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-  bgGrad.addColorStop(0, '#01170e');
-  bgGrad.addColorStop(0.3, '#022416');
-  bgGrad.addColorStop(0.7, '#043823');
-  bgGrad.addColorStop(1, '#01150c');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, width, height);
+  if (isPrintClean) {
+    // Print-Friendly Clean White / Toner-Saver Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
 
-  // 2. Subtle Islamic Geometry / Radial Sheen in Central Field
-  const radialAura = ctx.createRadialGradient(width * 0.5, height * 0.45, 100 * s, width * 0.5, height * 0.45, 800 * s);
-  radialAura.addColorStop(0, 'rgba(16, 185, 129, 0.12)');
-  radialAura.addColorStop(0.5, 'rgba(212, 175, 55, 0.05)');
-  radialAura.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = radialAura;
-  ctx.fillRect(0, 0, width, height);
+    // Subtle ivory paper sheen
+    const paperGrad = ctx.createLinearGradient(0, 0, width, height);
+    paperGrad.addColorStop(0, '#ffffff');
+    paperGrad.addColorStop(0.5, '#fbfaf8');
+    paperGrad.addColorStop(1, '#f7f5f0');
+    ctx.fillStyle = paperGrad;
+    ctx.fillRect(0, 0, width, height);
 
-  // 3. Repeating Geometric Stars Texture (Subtle Arabesque Grid)
-  const starSpacing = 160 * s;
-  for (let gx = starSpacing / 2; gx < width; gx += starSpacing) {
-    for (let gy = starSpacing / 2; gy < height; gy += starSpacing) {
-      drawIslamicStar(ctx, gx, gy, 12 * s, 'rgba(212, 175, 55, 0.035)');
+    // Light repeating Islamic stars in print-friendly tone
+    const starSpacing = 160 * s;
+    for (let gx = starSpacing / 2; gx < width; gx += starSpacing) {
+      for (let gy = starSpacing / 2; gy < height; gy += starSpacing) {
+        drawIslamicStar(ctx, gx, gy, 12 * s, 'rgba(6, 78, 59, 0.03)');
+      }
+    }
+  } else {
+    // Flagship Deep Imperial Emerald & Royal Green
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, '#01170e');
+    bgGrad.addColorStop(0.3, '#022416');
+    bgGrad.addColorStop(0.7, '#043823');
+    bgGrad.addColorStop(1, '#01150c');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Central Emerald & Gold Radial Aura
+    const radialAura = ctx.createRadialGradient(width * 0.5, height * 0.45, 120 * s, width * 0.5, height * 0.45, 850 * s);
+    radialAura.addColorStop(0, 'rgba(16, 185, 129, 0.15)');
+    radialAura.addColorStop(0.5, 'rgba(212, 175, 55, 0.06)');
+    radialAura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = radialAura;
+    ctx.fillRect(0, 0, width, height);
+
+    // Repeating Geometric Star Pattern
+    const starSpacing = 160 * s;
+    for (let gx = starSpacing / 2; gx < width; gx += starSpacing) {
+      for (let gy = starSpacing / 2; gy < height; gy += starSpacing) {
+        drawIslamicStar(ctx, gx, gy, 12 * s, 'rgba(212, 175, 55, 0.04)');
+      }
     }
   }
 
-  // 4. Architectural Mihrab / Dome Contour in Background
+  // 2. Architectural Mihrab Arch Outline
   ctx.save();
-  ctx.strokeStyle = 'rgba(212, 175, 55, 0.09)';
+  ctx.strokeStyle = isPrintClean ? 'rgba(6, 78, 59, 0.08)' : 'rgba(212, 175, 55, 0.1)';
   ctx.lineWidth = 3 * s;
   ctx.beginPath();
   ctx.moveTo(width * 0.1, height);
   ctx.lineTo(width * 0.1, height * 0.35);
-  ctx.quadraticCurveTo(width * 0.5, -50 * s, width * 0.9, height * 0.35);
+  ctx.quadraticCurveTo(width * 0.5, -40 * s, width * 0.9, height * 0.35);
   ctx.lineTo(width * 0.9, height);
   ctx.stroke();
   ctx.restore();
 
-  // 5. Metallic Champagne Gold Gradient Palette
+  // 3. Metallic Champagne Gold Palette
   const goldGrad = ctx.createLinearGradient(0, 0, width, height);
-  goldGrad.addColorStop(0, '#fef08a');
-  goldGrad.addColorStop(0.25, '#d4af37');
-  goldGrad.addColorStop(0.5, '#e5c158');
-  goldGrad.addColorStop(0.75, '#b48c26');
-  goldGrad.addColorStop(1, '#fef9c3');
+  if (isPrintClean) {
+    goldGrad.addColorStop(0, '#b48c26');
+    goldGrad.addColorStop(0.5, '#d4af37');
+    goldGrad.addColorStop(1, '#946c16');
+  } else {
+    goldGrad.addColorStop(0, '#fef08a');
+    goldGrad.addColorStop(0.25, '#d4af37');
+    goldGrad.addColorStop(0.5, '#e5c158');
+    goldGrad.addColorStop(0.75, '#b48c26');
+    goldGrad.addColorStop(1, '#fef9c3');
+  }
 
-  // 6. Double Gold Outer Border & Inset Hairline Frame
+  // 4. Double Gold Outer Border & Inset Hairline Frame
   const marginOuter = 16 * s;
   const innerMargin = 32 * s;
   ctx.save();
-  // Heavy gold border
   ctx.lineWidth = 6 * s;
   ctx.strokeStyle = goldGrad;
   ctx.strokeRect(marginOuter, marginOuter, width - marginOuter * 2, height - marginOuter * 2);
 
-  // Fine inner hairline
-  ctx.lineWidth = 1.5 * s;
-  ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+  ctx.lineWidth = 2 * s;
+  ctx.strokeStyle = isPrintClean ? 'rgba(6, 78, 59, 0.35)' : 'rgba(212, 175, 55, 0.45)';
   ctx.strokeRect(innerMargin, innerMargin, width - innerMargin * 2, height - innerMargin * 2);
 
   // 4 Corner Ornate Brackets
-  const cornerSize = 40 * s;
+  const cornerSize = 44 * s;
   drawCornerBracket(ctx, innerMargin + 6 * s, innerMargin + 6 * s, cornerSize, 0, goldGrad);
   drawCornerBracket(ctx, width - innerMargin - 6 * s, innerMargin + 6 * s, cornerSize, 90, goldGrad);
   drawCornerBracket(ctx, width - innerMargin - 6 * s, height - innerMargin - 6 * s, cornerSize, 180, goldGrad);
@@ -283,18 +320,17 @@ export async function renderStudentIdCardCanvas(
   ctx.restore();
 
   // --------------------------------------------------------------------------
-  // 7. HEADER ZONE (Y: 50 * s to 190 * s)
+  // 5. COLLEGE HEADER ZONE (Top)
   // --------------------------------------------------------------------------
   const logoX = 75 * s;
-  const logoY = 60 * s;
-  const logoD = 120 * s;
+  const logoY = 55 * s;
+  const logoD = 130 * s;
 
-  // College Logo Circular Medallion
+  // College Crest Medallion
   try {
     const logoImg = await loadImage(COLLEGE_LOGO);
     ctx.save();
-    // Shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
     ctx.shadowBlur = 12 * s;
     ctx.shadowOffsetY = 4 * s;
 
@@ -303,7 +339,6 @@ export async function renderStudentIdCardCanvas(
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    // Gold rim
     ctx.lineWidth = 4 * s;
     ctx.strokeStyle = goldGrad;
     ctx.stroke();
@@ -316,143 +351,137 @@ export async function renderStudentIdCardCanvas(
   }
 
   // Header Typography
-  const titleX = 220 * s;
+  const titleX = 230 * s;
   ctx.textAlign = 'left';
 
-  // Primary Institution Name: AL DHEENIYYA ARABIC COLLEGE
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-  ctx.shadowBlur = 6 * s;
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `900 ${36 * s}px "Inter", "Plus Jakarta Sans", sans-serif`;
-  ctx.fillText('AL DHEENIYYA ARABIC COLLEGE', titleX, 102 * s);
+  // Primary Institution Title
+  ctx.fillStyle = isPrintClean ? '#064e3b' : '#ffffff';
+  ctx.font = `900 ${40 * s}px "Inter", "Plus Jakarta Sans", sans-serif`;
+  ctx.fillText('AL DHEENIYYA ARABIC COLLEGE', titleX, 100 * s);
 
   // Arabic Subtitle: المكتبة الإسلامية الرقمية
-  ctx.fillStyle = goldGrad;
-  ctx.font = `bold ${30 * s}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillText('المكتبة الإسلامية الرقمية', titleX, 138 * s);
+  ctx.fillStyle = isPrintClean ? '#92400e' : goldGrad;
+  ctx.font = `bold ${34 * s}px "Amiri", "Scheherazade New", serif`;
+  ctx.fillText('المكتبة الإسلامية الرقمية', titleX, 140 * s);
 
-  // English & Arabic Pass Subtitles
-  ctx.fillStyle = '#a7f3d0';
-  ctx.font = `600 ${15 * s}px "Inter", sans-serif`;
-  ctx.fillText('STUDENT LIBRARY IDENTIFICATION PASS', titleX, 166 * s);
+  // Subtitles: STUDENT LIBRARY IDENTIFICATION PASS • البطاقة الذكية للمكتبة
+  ctx.fillStyle = isPrintClean ? '#047857' : '#a7f3d0';
+  ctx.font = `700 ${18 * s}px "Inter", sans-serif`;
+  ctx.fillText('STUDENT LIBRARY IDENTIFICATION PASS', titleX, 172 * s);
 
-  ctx.fillStyle = '#fef08a';
-  ctx.font = `600 ${16 * s}px "Amiri", "Scheherazade New", serif`;
-  ctx.fillText('•  البطاقة الذكية للمكتبة', titleX + 370 * s, 166 * s);
+  ctx.fillStyle = isPrintClean ? '#b45309' : '#fef08a';
+  ctx.font = `bold ${19 * s}px "Amiri", "Scheherazade New", serif`;
+  ctx.fillText('•  البطاقة الذكية للمكتبة', titleX + 430 * s, 172 * s);
   ctx.restore();
 
-  // Header Horizontal Divider with Star Accent
-  const dividerY = 195 * s;
+  // Header Horizontal Divider
+  const dividerY = 202 * s;
   ctx.save();
-  ctx.lineWidth = 1.5 * s;
-  ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
+  ctx.lineWidth = 2 * s;
+  ctx.strokeStyle = isPrintClean ? 'rgba(6, 78, 59, 0.4)' : 'rgba(212, 175, 55, 0.5)';
   ctx.beginPath();
   ctx.moveTo(innerMargin + 20 * s, dividerY);
   ctx.lineTo(width - innerMargin - 20 * s, dividerY);
   ctx.stroke();
 
-  // Central 8-pointed gold star on divider
-  drawIslamicStar(ctx, width / 2, dividerY, 10 * s, '#d4af37');
+  // Central 8-pointed gold star
+  drawIslamicStar(ctx, width / 2, dividerY, 11 * s, isPrintClean ? '#b48c26' : '#d4af37');
   ctx.restore();
 
   // --------------------------------------------------------------------------
-  // 8. STUDENT PHOTO ZONE (Left Section: X: 80 * s, Y: 225 * s, W: 360 * s, H: 480 * s)
+  // 6. STUDENT PHOTO ZONE (Left Section: X: 80 * s, Y: 235 * s)
   // --------------------------------------------------------------------------
   const photoX = 80 * s;
-  const photoY = 225 * s;
-  const photoW = 360 * s;
-  const photoH = 480 * s;
+  const photoY = 235 * s;
+  const photoW = 370 * s;
+  const photoH = 470 * s;
   const photoRadius = 24 * s;
 
   ctx.save();
-  // Photo Shadow
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
   ctx.shadowBlur = 18 * s;
   ctx.shadowOffsetY = 8 * s;
 
-  // Rounded rectangle path for student photo
   ctx.beginPath();
   ctx.roundRect(photoX, photoY, photoW, photoH, photoRadius);
-  ctx.fillStyle = '#062016';
+  ctx.fillStyle = isPrintClean ? '#e2e8f0' : '#042217';
   ctx.fill();
 
-  // Gold frame
   ctx.lineWidth = 5 * s;
   ctx.strokeStyle = goldGrad;
   ctx.stroke();
   ctx.clip();
 
-  // Draw real student photo if present, else fallback
   const validPhoto = getValidValue(student.img);
   if (validPhoto) {
     try {
       const studentImg = await loadImage(validPhoto);
       drawImageProp(ctx, studentImg, photoX, photoY, photoW, photoH);
     } catch {
-      drawPhotoFallback(ctx, student, photoX, photoY, photoW, photoH, s);
+      drawPhotoFallback(ctx, student, photoX, photoY, photoW, photoH, s, isPrintClean);
     }
   } else {
-    drawPhotoFallback(ctx, student, photoX, photoY, photoW, photoH, s);
+    drawPhotoFallback(ctx, student, photoX, photoY, photoW, photoH, s, isPrintClean);
   }
   ctx.restore();
 
-  // Student ID Gold Pill beneath photo
+  // Prominent Student ID Badge directly under photo
   const idBadgeY = photoY + photoH + 20 * s;
-  const idBadgeH = 50 * s;
+  const idBadgeH = 62 * s;
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(photoX, idBadgeY, photoW, idBadgeH, 12 * s);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.roundRect(photoX, idBadgeY, photoW, idBadgeH, 14 * s);
+  ctx.fillStyle = isPrintClean ? '#064e3b' : 'rgba(0, 0, 0, 0.7)';
   ctx.fill();
-  ctx.lineWidth = 2 * s;
+  ctx.lineWidth = 2.5 * s;
   ctx.strokeStyle = goldGrad;
   ctx.stroke();
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${24 * s}px monospace`;
-  ctx.fillText(`ID: ${student.id}`, photoX + photoW / 2, idBadgeY + 34 * s);
+  ctx.font = `bold ${30 * s}px monospace`;
+  ctx.fillText(`ID: ${student.id}`, photoX + photoW / 2, idBadgeY + 42 * s);
   ctx.restore();
 
   // --------------------------------------------------------------------------
-  // 9. CENTRE INFORMATION ZONE (X: 480 * s, Y: 230 * s)
+  // 7. CENTRE INFORMATION ZONE (ENLARGED & HIGHLY READABLE)
   // --------------------------------------------------------------------------
-  const infoX = 480 * s;
-  let infoY = 250 * s;
+  const infoX = 490 * s;
+  let infoY = 255 * s;
 
-  // Student Full Name (Arabic and/or Latin)
+  // Student Full Name (Much larger, bold, high-contrast)
   const studentName = getValidValue(student.n) || 'REGISTERED STUDENT';
   ctx.save();
   ctx.textAlign = 'left';
-  ctx.fillStyle = goldGrad;
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-  ctx.shadowBlur = 8 * s;
+  ctx.fillStyle = isPrintClean ? '#064e3b' : goldGrad;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 6 * s;
 
-  // Dynamically calculate font size to prevent overlapping
-  let nameFontSize = 46 * s;
-  if (studentName.length > 28) nameFontSize = 34 * s;
-  else if (studentName.length > 20) nameFontSize = 40 * s;
+  // Dynamic font scaling for student name
+  let nameFontSize = 58 * s;
+  if (studentName.length > 28) nameFontSize = 42 * s;
+  else if (studentName.length > 20) nameFontSize = 48 * s;
 
   ctx.font = `bold ${nameFontSize}px "Amiri", "Inter", serif`;
-  ctx.fillText(studentName, infoX, infoY + 28 * s);
+  ctx.fillText(studentName, infoX, infoY + 36 * s);
   ctx.restore();
 
-  infoY += 56 * s;
+  infoY += 68 * s;
 
   // Thin gold rule under name
   ctx.save();
-  ctx.lineWidth = 1 * s;
-  ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+  ctx.lineWidth = 1.5 * s;
+  ctx.strokeStyle = isPrintClean ? 'rgba(6, 78, 59, 0.3)' : 'rgba(212, 175, 55, 0.45)';
   ctx.beginPath();
   ctx.moveTo(infoX, infoY);
-  ctx.lineTo(infoX + 780 * s, infoY);
+  ctx.lineTo(infoX + 820 * s, infoY);
   ctx.stroke();
   ctx.restore();
 
-  infoY += 28 * s;
+  infoY += 34 * s;
 
-  // Extract ONLY real valid data fields (No hyphens, No dashes, No fake placeholders)
+  // Extract clean valid fields
   const regNo = getValidValue(student.rg);
   const studentClass = getValidValue(student.cl);
   const studentTown = getValidValue(student.tn);
@@ -464,7 +493,7 @@ export async function renderStudentIdCardCanvas(
     labelEn: string;
     labelAr: string;
     val: string;
-    isPrimary?: boolean;
+    isHighlight?: boolean;
     isExpiry?: boolean;
   }
 
@@ -475,7 +504,7 @@ export async function renderStudentIdCardCanvas(
       labelEn: 'Registration No.',
       labelAr: 'رقم التسجيل',
       val: regNo,
-      isPrimary: true,
+      isHighlight: true,
     });
   }
 
@@ -490,7 +519,7 @@ export async function renderStudentIdCardCanvas(
   if (studentTown) {
     infoRows.push({
       labelEn: 'Location / Town',
-      labelAr: 'الإقامة / البلدة',
+      labelAr: 'المدينة / الإقامة',
       val: studentTown,
     });
   }
@@ -511,65 +540,86 @@ export async function renderStudentIdCardCanvas(
     });
   }
 
-  // Card Expiry: If not explicitly set, show valid academic status
+  // Card Expiry: Mandatory security field
   infoRows.push({
     labelEn: 'Card Expiry',
-    labelAr: 'تاريخ الانتهاء',
+    labelAr: 'تاريخ الصلاحية',
     val: expiryDate || '2028-12-31',
     isExpiry: true,
   });
 
-  // Render info rows with clean dual-language alignment
-  const rowHeight = 44 * s;
+  // Render info rows with LARGE, BOLD, HIGH-LEGIBILITY FONTS
+  // Row height is generous: 62 * s
+  const rowHeight = 62 * s;
   infoRows.forEach((row) => {
     ctx.save();
-    // Label English
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#a7f3d0';
-    ctx.font = `600 ${15 * s}px "Inter", sans-serif`;
-    ctx.fillText(row.labelEn, infoX, infoY);
 
-    // Label Arabic
-    ctx.fillStyle = 'rgba(212, 175, 55, 0.85)';
-    ctx.font = `bold ${16 * s}px "Amiri", "Scheherazade New", serif`;
-    ctx.fillText(`· ${row.labelAr}`, infoX + 160 * s, infoY);
-
-    // Separator colon
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = `${16 * s}px sans-serif`;
-    ctx.fillText(':', infoX + 310 * s, infoY);
-
-    // Value
-    ctx.textAlign = 'left';
-    if (row.isExpiry) {
-      ctx.fillStyle = '#fef08a';
-      ctx.font = `bold ${18 * s}px monospace`;
-    } else if (row.isPrimary) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${18 * s}px monospace`;
+    // Subtle background card strip for each detail row in luxury mode
+    if (!isPrintClean) {
+      ctx.beginPath();
+      ctx.roundRect(infoX - 10 * s, infoY - 26 * s, 830 * s, 52 * s, 10 * s);
+      ctx.fillStyle = row.isExpiry
+        ? 'rgba(212, 175, 55, 0.12)'
+        : row.isHighlight
+        ? 'rgba(16, 185, 129, 0.1)'
+        : 'rgba(0, 0, 0, 0.25)';
+      ctx.fill();
     } else {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${17 * s}px "Inter", "Amiri", sans-serif`;
+      ctx.beginPath();
+      ctx.roundRect(infoX - 10 * s, infoY - 26 * s, 830 * s, 52 * s, 10 * s);
+      ctx.fillStyle = row.isExpiry ? 'rgba(245, 158, 11, 0.08)' : 'rgba(6, 78, 59, 0.04)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(6, 78, 59, 0.12)';
+      ctx.lineWidth = 1 * s;
+      ctx.stroke();
     }
 
-    ctx.fillText(row.val, infoX + 330 * s, infoY);
+    // Label English (ENLARGED to 22px * s)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = isPrintClean ? '#065f46' : '#a7f3d0';
+    ctx.font = `700 ${22 * s}px "Inter", sans-serif`;
+    ctx.fillText(row.labelEn, infoX, infoY + 6 * s);
+
+    // Label Arabic (ENLARGED to 24px * s)
+    ctx.fillStyle = isPrintClean ? '#b45309' : 'rgba(254, 240, 138, 0.9)';
+    ctx.font = `bold ${24 * s}px "Amiri", "Scheherazade New", serif`;
+    ctx.fillText(`· ${row.labelAr}`, infoX + 210 * s, infoY + 7 * s);
+
+    // Separator colon
+    ctx.fillStyle = isPrintClean ? 'rgba(0,0,0,0.3)' : 'rgba(255, 255, 255, 0.4)';
+    ctx.font = `bold ${24 * s}px sans-serif`;
+    ctx.fillText(':', infoX + 380 * s, infoY + 6 * s);
+
+    // Detail Value (ENLARGED to 26px - 30px * s)
+    ctx.textAlign = 'left';
+    if (row.isExpiry) {
+      ctx.fillStyle = isPrintClean ? '#b45309' : '#fef08a';
+      ctx.font = `bold ${28 * s}px monospace`;
+    } else if (row.isHighlight) {
+      ctx.fillStyle = isPrintClean ? '#064e3b' : '#ffffff';
+      ctx.font = `bold ${28 * s}px monospace`;
+    } else {
+      ctx.fillStyle = isPrintClean ? '#0f172a' : '#ffffff';
+      ctx.font = `bold ${26 * s}px "Inter", "Amiri", sans-serif`;
+    }
+
+    ctx.fillText(row.val, infoX + 410 * s, infoY + 6 * s);
     ctx.restore();
 
     infoY += rowHeight;
   });
 
   // --------------------------------------------------------------------------
-  // 10. REAL MACHINE-READABLE QR CODE ZONE (Right Section: X: 1420 * s, Y: 225 * s)
+  // 8. REAL MACHINE-READABLE QR CODE ZONE (Right Section)
   // --------------------------------------------------------------------------
-  const qrBoxX = 1420 * s;
-  const qrBoxY = 225 * s;
-  const qrBoxW = 410 * s;
-  const qrBoxH = 500 * s;
+  const qrBoxX = 1370 * s;
+  const qrBoxY = 235 * s;
+  const qrBoxW = 460 * s;
+  const qrBoxH = 550 * s;
   const qrBoxRadius = 24 * s;
 
   ctx.save();
-  // Outer QR card shadow
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
   ctx.shadowBlur = 18 * s;
   ctx.shadowOffsetY = 8 * s;
 
@@ -589,15 +639,14 @@ export async function renderStudentIdCardCanvas(
   const qrCenterX = qrBoxX + qrBoxW / 2;
 
   ctx.fillStyle = '#064e3b';
-  ctx.font = `900 ${15 * s}px "Inter", sans-serif`;
-  ctx.fillText('OFFICIAL DIGITAL PASS', qrCenterX, qrBoxY + 32 * s);
+  ctx.font = `900 ${18 * s}px "Inter", sans-serif`;
+  ctx.fillText('OFFICIAL DIGITAL PASS', qrCenterX, qrBoxY + 36 * s);
 
   ctx.fillStyle = '#b48c26';
-  ctx.font = `bold ${14 * s}px "Amiri", serif`;
-  ctx.fillText('التحقق الأمني المعتمد', qrCenterX, qrBoxY + 52 * s);
+  ctx.font = `bold ${17 * s}px "Amiri", serif`;
+  ctx.fillText('التحقق الأمني المعتمد للكلية', qrCenterX, qrBoxY + 60 * s);
 
   // Generate Real Machine-Readable QR Code
-  // Encodes real verification link: `${window.location.origin}/?verify=${encodeURIComponent(student.id)}`
   const verificationUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/?verify=${encodeURIComponent(student.id)}`
@@ -605,7 +654,7 @@ export async function renderStudentIdCardCanvas(
 
   try {
     const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
-      width: Math.round(280 * s),
+      width: Math.round(300 * s),
       margin: 1,
       color: {
         dark: '#022416',
@@ -615,51 +664,50 @@ export async function renderStudentIdCardCanvas(
     });
 
     const qrImg = await loadImage(qrDataUrl);
-    const qrSize = 270 * s;
+    const qrSize = 300 * s;
     const qrDrawX = qrCenterX - qrSize / 2;
-    const qrDrawY = qrBoxY + 68 * s;
+    const qrDrawY = qrBoxY + 76 * s;
 
     ctx.drawImage(qrImg, qrDrawX, qrDrawY, qrSize, qrSize);
 
-    // Scan instruction badge below QR
+    // Scan instruction pill below QR
     const scanBadgeY = qrDrawY + qrSize + 16 * s;
     ctx.beginPath();
-    ctx.roundRect(qrCenterX - 140 * s, scanBadgeY, 280 * s, 34 * s, 8 * s);
+    ctx.roundRect(qrCenterX - 170 * s, scanBadgeY, 340 * s, 40 * s, 10 * s);
     ctx.fillStyle = '#064e3b';
     ctx.fill();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${13 * s}px "Inter", sans-serif`;
-    ctx.fillText('SCAN TO VERIFY RECORD', qrCenterX, scanBadgeY + 22 * s);
+    ctx.font = `bold ${15 * s}px "Inter", sans-serif`;
+    ctx.fillText('SCAN TO VERIFY RECORD', qrCenterX, scanBadgeY + 26 * s);
 
-    // Student ID Verification string
+    // Student ID Verification string (Enlarged)
     ctx.fillStyle = '#022416';
-    ctx.font = `bold ${15 * s}px monospace`;
-    ctx.fillText(`VERIFY: ${student.id}`, qrCenterX, scanBadgeY + 62 * s);
+    ctx.font = `bold ${20 * s}px monospace`;
+    ctx.fillText(`VERIFY: ${student.id}`, qrCenterX, scanBadgeY + 68 * s);
 
     ctx.fillStyle = '#059669';
-    ctx.font = `600 ${12 * s}px "Inter", sans-serif`;
-    ctx.fillText('✓ CENTRAL REGISTRY VERIFIED', qrCenterX, scanBadgeY + 82 * s);
+    ctx.font = `bold ${14 * s}px "Inter", sans-serif`;
+    ctx.fillText('✓ CENTRAL REGISTRY VERIFIED', qrCenterX, scanBadgeY + 92 * s);
   } catch (err) {
     console.warn('Failed to render real QR on canvas:', err);
   }
   ctx.restore();
 
   // --------------------------------------------------------------------------
-  // 11. FOOTER ZONE (Bottom: Y: 920 * s to 1030 * s)
+  // 9. FOOTER ZONE (Bottom Banner: Y: 920 * s to 1035 * s)
   // --------------------------------------------------------------------------
   const footerY = 920 * s;
-  const footerH = 110 * s;
+  const footerH = 112 * s;
   const footerX = innerMargin + 10 * s;
   const footerW = width - (innerMargin + 10 * s) * 2;
 
   ctx.save();
-  // Dark emerald footer container with gold border
   ctx.beginPath();
-  ctx.roundRect(footerX, footerY, footerW, footerH, 16 * s);
-  ctx.fillStyle = 'rgba(2, 23, 15, 0.9)';
+  ctx.roundRect(footerX, footerY, footerW, footerH, 18 * s);
+  ctx.fillStyle = isPrintClean ? '#064e3b' : 'rgba(2, 23, 15, 0.92)';
   ctx.fill();
-  ctx.lineWidth = 2 * s;
+  ctx.lineWidth = 2.5 * s;
   ctx.strokeStyle = goldGrad;
   ctx.stroke();
 
@@ -671,53 +719,63 @@ export async function renderStudentIdCardCanvas(
 
   const badgeX = footerX + 24 * s;
   const badgeY = footerY + 28 * s;
-  const badgeW = 220 * s;
-  const badgeH = 54 * s;
+  const badgeW = 230 * s;
+  const badgeH = 56 * s;
 
   ctx.beginPath();
   ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 12 * s);
   ctx.fillStyle = badgeColor;
   ctx.fill();
 
-  // White checkmark circle inside badge
+  // White checkmark circle
   ctx.beginPath();
-  ctx.arc(badgeX + 28 * s, badgeY + badgeH / 2, 14 * s, 0, Math.PI * 2);
+  ctx.arc(badgeX + 30 * s, badgeY + badgeH / 2, 15 * s, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   ctx.fillStyle = badgeColor;
-  ctx.font = `bold ${16 * s}px sans-serif`;
+  ctx.font = `bold ${17 * s}px sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText('✓', badgeX + 28 * s, badgeY + badgeH / 2 + 5 * s);
+  ctx.fillText('✓', badgeX + 30 * s, badgeY + badgeH / 2 + 5 * s);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = `900 ${15 * s}px "Inter", sans-serif`;
+  ctx.font = `900 ${16 * s}px "Inter", sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText(badgeText, badgeX + 54 * s, badgeY + 34 * s);
+  ctx.fillText(badgeText, badgeX + 58 * s, badgeY + 35 * s);
 
-  // Center Official Text
+  // Center Official Text (Enlarged)
   ctx.textAlign = 'center';
   const centerFooterX = footerX + footerW / 2;
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${15 * s}px "Inter", sans-serif`;
+  ctx.font = `bold ${17 * s}px "Inter", sans-serif`;
   ctx.fillText('DHEENIYYA ARABIC COLLEGE  •  OFFICIAL DIGITAL IDENTIFICATION CARD', centerFooterX, footerY + 44 * s);
 
   ctx.fillStyle = '#a7f3d0';
-  ctx.font = `${13 * s}px "Inter", sans-serif`;
-  ctx.fillText('NON-TRANSFERABLE  •  COLLEGE LIBRARY ACCESS ONLY', centerFooterX, footerY + 74 * s);
+  ctx.font = `600 ${14 * s}px "Inter", sans-serif`;
+  ctx.fillText('NON-TRANSFERABLE  •  COLLEGE LIBRARY ACCESS ONLY', centerFooterX, footerY + 76 * s);
 
   // Right Super Admin Authority Seal
   ctx.textAlign = 'right';
   const rightFooterX = footerX + footerW - 24 * s;
   ctx.fillStyle = goldGrad;
-  ctx.font = `bold ${17 * s}px monospace`;
+  ctx.font = `bold ${20 * s}px monospace`;
   ctx.fillText('AUTH: SUPER ADMIN', rightFooterX, footerY + 44 * s);
 
   ctx.fillStyle = '#fef08a';
-  ctx.font = `600 ${13 * s}px "Inter", sans-serif`;
-  ctx.fillText('AUTHENTICATED PASS', rightFooterX, footerY + 74 * s);
+  ctx.font = `600 ${14 * s}px "Inter", sans-serif`;
+  ctx.fillText('AUTHENTICATED PASS', rightFooterX, footerY + 76 * s);
 
   ctx.restore();
+
+  // 10. Optional Scissor Cut Guides (for A4 Paper Printing)
+  if (options.includeCutGuides) {
+    ctx.save();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1 * s;
+    ctx.setLineDash([8 * s, 8 * s]);
+    ctx.strokeRect(6 * s, 6 * s, width - 12 * s, height - 12 * s);
+    ctx.restore();
+  }
 
   return canvas;
 }
@@ -732,28 +790,25 @@ function drawPhotoFallback(
   y: number,
   w: number,
   h: number,
-  s: number
+  s: number,
+  isPrintClean: boolean
 ) {
-  // Deep emerald textured placeholder
-  ctx.fillStyle = '#032014';
+  ctx.fillStyle = isPrintClean ? '#e2e8f0' : '#032014';
   ctx.fillRect(x, y, w, h);
 
-  // Subtle circular watermark
   ctx.beginPath();
   ctx.arc(x + w / 2, y + h / 2, w * 0.35, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(212, 175, 55, 0.08)';
+  ctx.fillStyle = isPrintClean ? 'rgba(6, 78, 59, 0.08)' : 'rgba(212, 175, 55, 0.08)';
   ctx.fill();
 
-  // Student Initial
   const nameLetter = (student.n || '?').trim().charAt(0) || '?';
-  ctx.fillStyle = '#fef08a';
-  ctx.font = `bold ${110 * s}px "Amiri", "Inter", serif`;
+  ctx.fillStyle = isPrintClean ? '#064e3b' : '#fef08a';
+  ctx.font = `bold ${120 * s}px "Amiri", "Inter", serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(nameLetter, x + w / 2, y + h / 2 + 35 * s);
+  ctx.fillText(nameLetter, x + w / 2, y + h / 2 + 40 * s);
 
-  // Subtext
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-  ctx.font = `600 ${15 * s}px "Inter", sans-serif`;
+  ctx.fillStyle = isPrintClean ? '#64748b' : 'rgba(255, 255, 255, 0.6)';
+  ctx.font = `700 ${16 * s}px "Inter", sans-serif`;
   ctx.fillText('DEENIYYA STUDENT', x + w / 2, y + h - 35 * s);
   ctx.textAlign = 'left';
 }
@@ -766,9 +821,10 @@ export async function downloadStudentIdCardImage(
   student: Student,
   settings: LibrarySettings,
   format: 'png' | 'jpeg' = 'png',
-  resolution: CardResolution = '3K'
+  resolution: CardResolution = '3K',
+  theme: CardPrintTheme = 'emerald-gold'
 ): Promise<void> {
-  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution, format });
+  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution, format, theme });
   const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
   const extension = format === 'jpeg' ? 'jpg' : 'png';
 
@@ -779,7 +835,7 @@ export async function downloadStudentIdCardImage(
     .replace(/[^\w\u0600-\u06FF\s-]/g, '')
     .replace(/\s+/g, '_');
 
-  const filename = `${student.id}_${cleanName}_${resolution}_ID_Card.${extension}`;
+  const filename = `${student.id}_${cleanName}_${resolution}_${theme}_ID_Card.${extension}`;
 
   const link = document.createElement('a');
   link.download = filename;
@@ -795,12 +851,12 @@ export async function downloadStudentIdCardImage(
 export async function downloadStudentIdCardPdf(
   student: Student,
   settings: LibrarySettings,
-  resolution: CardResolution = '3K'
+  resolution: CardResolution = '3K',
+  theme: CardPrintTheme = 'emerald-gold'
 ): Promise<void> {
-  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution });
+  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution, theme });
   const imgData = canvas.toDataURL('image/jpeg', 0.96);
 
-  // Exact 16:9 Landscape PDF: 297mm x 167.0625mm (matches standard A4 width at 16:9)
   const pdfWidthMm = 297;
   const pdfHeightMm = (297 * 9) / 16; // 167.0625 mm
 
@@ -817,7 +873,7 @@ export async function downloadStudentIdCardPdf(
     .replace(/[^\w\u0600-\u06FF\s-]/g, '')
     .replace(/\s+/g, '_');
 
-  const filename = `${student.id}_${cleanName}_Landscape_16-9_ID_Card.pdf`;
+  const filename = `${student.id}_${cleanName}_Landscape_16-9_${theme}_ID_Card.pdf`;
   doc.save(filename);
 }
 
@@ -828,9 +884,10 @@ export async function downloadStudentIdCardPdf(
 export async function printSingleStudentIdCard(
   student: Student,
   settings: LibrarySettings,
-  resolution: CardResolution = '3K'
+  resolution: CardResolution = '3K',
+  theme: CardPrintTheme = 'emerald-gold'
 ): Promise<void> {
-  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution });
+  const canvas = await renderStudentIdCardCanvas(student, settings, { resolution, theme, includeCutGuides: true });
   const dataUrl = canvas.toDataURL('image/png');
 
   const printWindow = window.open('', '_blank', 'width=1100,height=700');
@@ -854,8 +911,9 @@ export async function printSingleStudentIdCard(
       padding: 0;
       width: 100%;
       height: 100%;
-      background: #000;
+      background: #ffffff;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       -webkit-print-color-adjust: exact;
@@ -869,12 +927,15 @@ export async function printSingleStudentIdCard(
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 10px;
+      box-sizing: border-box;
     }
     img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       display: block;
+      border-radius: 8px;
     }
     @media print {
       body {
@@ -883,6 +944,7 @@ export async function printSingleStudentIdCard(
       .print-container {
         width: 100%;
         height: 100%;
+        padding: 0;
       }
     }
   </style>
