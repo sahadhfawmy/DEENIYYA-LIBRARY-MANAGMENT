@@ -310,7 +310,7 @@ export default function App() {
       const entry: AuditLog = {
         id: 'log-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         a: action,
-        by: session.role === 'SUPER_ADMIN' ? session.email || settings.staff : 'Public Visitor',
+        by: (session.role === 'SUPER_ADMIN' || session.role === 'ADMIN') ? session.email || settings.staff : 'Public Visitor',
         at: new Date().toISOString(),
         ty: type,
         rid: relatedId,
@@ -750,15 +750,30 @@ export default function App() {
   const overdueCount = activeLoans.filter((l) => l.due < todayStr).length;
   const availableCopies = copies.filter((c) => c.st === 'available').length;
 
-  // Loading Screen
+  // Loading Screen (Islamic Luxury Architecture)
   if (!dataLoaded) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 space-y-4">
-        <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-center space-y-1">
-          <h2 className="text-lg font-bold">Deeniya Arabic College Library</h2>
-          <p className="text-xs text-emerald-300 font-arabic">جارٍ تهيئة الفهرس الرقمي وقواعد البيانات المقفلة...</p>
-          <p className="text-[11px] text-slate-400">Loading 5,869 titles & 10,492 accession copies securely</p>
+      <div className="min-h-screen bg-gradient-to-b from-[#02170f] via-[#04261a] to-[#01140c] text-white flex flex-col items-center justify-center p-6 space-y-6 relative overflow-hidden bg-islamic-pattern">
+        {/* Subtle radial glow */}
+        <div className="absolute w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col items-center space-y-4 text-center">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-3xl border-2 border-amber-400/40 border-t-amber-400 border-r-emerald-400 animate-spin flex items-center justify-center shadow-lg shadow-emerald-950/60" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-amber-300 font-bold text-xs">﷽</span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold tracking-tight text-amber-100 font-sans">
+              Deeniya Arabic College Library
+            </h2>
+            <p className="text-sm text-emerald-300 font-arabic font-semibold">
+              المكتبة المركزية لكلية دينية العربية · الفهرس الرقمي
+            </p>
+            <p className="text-xs text-slate-400">
+              Loading 5,869 scholarly titles & 10,492 accession copies securely
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -767,7 +782,7 @@ export default function App() {
   const isSuperAdmin = session.role === 'SUPER_ADMIN' || session.role === 'ADMIN';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#02170f] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors relative bg-islamic-pattern">
       {/* Top Navbar */}
       <Navbar
         currentTab={currentTab}
@@ -1030,7 +1045,7 @@ export default function App() {
           ) : (
             <button
               onClick={() => setIsChatWidgetOpen(true)}
-              className="fixed bottom-5 right-5 z-40 flex items-center space-x-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-800 via-emerald-700 to-amber-700 hover:from-emerald-700 hover:to-amber-600 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 border border-amber-400/30 group"
+              className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center space-x-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-800 via-emerald-700 to-amber-700 hover:from-emerald-700 hover:to-amber-600 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 border border-amber-400/40 group backdrop-blur-md"
               title="Open Gemini AI Scholar Chat · اسأل المساعد الذكي"
             >
               <div className="relative">

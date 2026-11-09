@@ -67,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectTheme,
   stats,
 }) => {
-  const isSuperAdmin = session.role === 'SUPER_ADMIN';
+  const isSuperAdmin = session.role === 'SUPER_ADMIN' || session.role === 'ADMIN';
 
   // 3D vs 2D UI Mode State (Persisted)
   const [dimension, setDimension] = useState<DimensionMode>(() => {
@@ -255,6 +255,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   });
 
   const themesList: { id: LuxuryThemeId; name: string; icon: string; dot: string }[] = [
+    { id: 'emerald-gold', name: 'Emerald & Gold', icon: '🏛️', dot: 'bg-emerald-400' },
     { id: 'royal-gold', name: 'Royal Gold', icon: '👑', dot: 'bg-amber-400' },
     { id: 'midnight-purple', name: 'Midnight Purple', icon: '🔮', dot: 'bg-purple-500' },
     { id: 'classic-ivory', name: 'Classic Ivory', icon: '📜', dot: 'bg-amber-700' },

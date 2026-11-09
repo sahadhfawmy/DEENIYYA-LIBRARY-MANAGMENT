@@ -177,28 +177,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner with 2D / 3D Mode Selector & Institution Details */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white p-6 sm:p-8 shadow-xl border border-emerald-800/40">
+      {/* Top Banner with Islamic Architectural Motif, 2D/3D Selector & Institution Details */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#022416] via-[#043320] to-[#021f14] text-white p-6 sm:p-8 shadow-2xl border border-amber-400/30 bg-islamic-arabesque">
         {/* Ambient illumination */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-800/60 border border-emerald-600/40 text-emerald-200 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Deeniya Arabic College · Central Digital Library System</span>
+          <div className="max-w-2xl space-y-2.5">
+            <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-emerald-900/80 border border-amber-400/30 text-amber-200 text-xs font-semibold backdrop-blur-md shadow-sm">
+              <span className="text-amber-300 font-arabic text-sm">﷽</span>
+              <span className="text-emerald-400/50">·</span>
+              <span>Deeniya Arabic College · Central Digital Library</span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight font-sans">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight font-sans text-amber-50 drop-shadow-sm">
               {settings.name}
             </h2>
 
-            <p className="text-sm sm:text-base font-arabic text-emerald-100 font-medium">
+            <p className="text-base sm:text-lg font-arabic text-amber-200/95 font-semibold tracking-wide">
               {settings.ar} · {settings.lib}
             </p>
 
-            <p className="text-xs sm:text-sm text-slate-300/90 leading-relaxed pt-1">
+            <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed pt-0.5">
               Preserving classical Islamic sciences, jurisprudence (Fiqh), Hadith collections, Quranic exegesis (Tafsir), Arabic grammar, and academic literature with role-based security.
             </p>
           </div>

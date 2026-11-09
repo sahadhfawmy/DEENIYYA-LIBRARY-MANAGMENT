@@ -1,4 +1,4 @@
-export type LuxuryThemeId = 'royal-gold' | 'midnight-purple' | 'classic-ivory' | 'modern-dark';
+export type LuxuryThemeId = 'emerald-gold' | 'royal-gold' | 'midnight-purple' | 'classic-ivory' | 'modern-dark';
 
 export interface LuxuryTheme {
   id: LuxuryThemeId;
@@ -12,6 +12,16 @@ export interface LuxuryTheme {
 }
 
 export const LUXURY_THEMES: LuxuryTheme[] = [
+  {
+    id: 'emerald-gold',
+    name: 'Imperial Emerald & Gold',
+    arName: 'الزمردي الملكي والذهب الأندلسي',
+    description: 'Deep royal forest emerald with shimmering champagne gold Arabesque accents and 3D glassmorphic glow.',
+    primaryColor: '#10b981',
+    accentColor: '#032014',
+    bgPreview: 'from-[#032014] via-[#052b1b] to-[#01140c]',
+    isDarkDefault: true,
+  },
   {
     id: 'royal-gold',
     name: 'Royal Gold Luxury',
@@ -34,7 +44,7 @@ export const LUXURY_THEMES: LuxuryTheme[] = [
   },
   {
     id: 'classic-ivory',
-    name: 'Classic Ivory',
+    name: 'Classic Ivory Andalusian',
     arName: 'العاجي الأندلسي الكلاسيكي',
     description: 'Warm cream and ivory paper with dark navy typography and gold foil accents.',
     primaryColor: '#b45309',
@@ -62,7 +72,7 @@ export function getActiveThemeId(): LuxuryThemeId {
   if (saved && LUXURY_THEMES.some((t) => t.id === saved)) {
     return saved;
   }
-  return 'royal-gold';
+  return 'emerald-gold';
 }
 
 export function setActiveThemeId(themeId: LuxuryThemeId): void {

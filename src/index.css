@@ -38,6 +38,22 @@
 }
 
 /* Luxury Theme Root Variables */
+html[data-theme="emerald-gold"].dark {
+  --bg-main: #02170f;
+  --bg-card: #052619;
+  --border-card: rgba(212, 175, 55, 0.3);
+  --accent-gold: #d4af37;
+  --accent-emerald: #10b981;
+}
+
+html[data-theme="emerald-gold"] {
+  --bg-main: #f4faf6;
+  --bg-card: #ffffff;
+  --border-card: rgba(16, 185, 129, 0.25);
+  --accent-gold: #b45309;
+  --accent-emerald: #047857;
+}
+
 html[data-theme="royal-gold"].dark {
   --bg-main: #050b14;
   --bg-card: #0b1528;
@@ -64,6 +80,48 @@ html[data-theme="modern-dark"].dark {
   --bg-card: #0f172a;
   --border-card: rgba(16, 185, 129, 0.25);
   --accent-gold: #10b981;
+}
+
+/* Islamic Geometric & Arabesque Patterns (Zero-lag Pure Vector CSS) */
+.bg-islamic-pattern {
+  background-image: radial-gradient(rgba(212, 175, 55, 0.12) 1px, transparent 1px), radial-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.bg-islamic-arabesque {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0L40 20L20 40L0 20zM20 5L35 20L20 35L5 20z' fill='%23d4af37' fill-opacity='0.045' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+.bg-islamic-stars {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23d4af37' fill-opacity='0.05' fill-rule='evenodd'%3E%3Cpath d='M30 0l4.5 13.5L48 9l-4.5 13.5L57 27l-13.5 4.5L48 45l-13.5-4.5L30 54l-4.5-13.5L12 45l4.5-13.5L3 27l13.5-4.5L12 9l13.5 4.5z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Islamic 3D Layered Elevation & Glassmorphism */
+.card-islamic-3d {
+  transform: translateZ(0);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+  box-shadow: 0 10px 25px -5px rgba(2, 23, 15, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}
+
+.card-islamic-3d:hover {
+  transform: translateY(-3px) scale(1.006);
+  box-shadow: 0 20px 35px -10px rgba(16, 185, 129, 0.25), 0 0 20px rgba(212, 175, 55, 0.2);
+}
+
+.glass-emerald-3d {
+  background: rgba(4, 38, 26, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  box-shadow: 0 15px 35px -10px rgba(2, 20, 13, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #fce8a6 0%, #d4af37 50%, #aa8420 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 @media print {

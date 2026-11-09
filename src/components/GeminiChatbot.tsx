@@ -244,10 +244,10 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
   };
 
   const containerClasses = isFloating
-    ? `fixed bottom-5 right-5 z-50 w-full max-w-lg shadow-2xl rounded-3xl border border-amber-500/30 overflow-hidden bg-white dark:bg-slate-900 flex flex-col transition-all duration-300 ${
-        isMinimized ? 'h-14' : 'h-[620px] max-h-[85vh]'
+    ? `fixed bottom-3 left-3 right-3 sm:left-auto sm:right-5 sm:w-[480px] z-50 shadow-2xl rounded-3xl border border-amber-500/40 overflow-hidden bg-white dark:bg-slate-900 flex flex-col transition-all duration-300 ${
+        isMinimized ? 'h-14' : 'h-[580px] max-h-[88vh]'
       }`
-    : 'w-full max-w-5xl mx-auto rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 flex flex-col h-[760px] overflow-hidden';
+    : 'w-full max-w-5xl mx-auto rounded-3xl border border-slate-200 dark:border-slate-800 shadow-lg bg-white dark:bg-slate-900 flex flex-col h-[760px] overflow-hidden';
 
   return (
     <div className={containerClasses}>
