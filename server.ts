@@ -821,6 +821,9 @@ async function setupVite() {
   } else {
     const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
+    app.all('/api/*', (_req: Request, res: Response) => {
+      res.status(404).json({ success: false, error: 'API route not found' });
+    });
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });

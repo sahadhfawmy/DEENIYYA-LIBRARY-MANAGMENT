@@ -113,9 +113,12 @@ export async function initializeLibraryData(): Promise<LibraryState> {
   // Seed from /seed-catalog.json (contains 5,869 books and 10,492 copies)
   try {
     const resp = await fetch('/seed-catalog.json');
-    if (resp.ok) {
-      const seed = await resp.json();
-      const initialBooks: Book[] = (seed.books || []).map((b: string[]) => ({
+    const contentType = resp.headers.get('content-type') || '';
+    if (resp.ok && !contentType.includes('text/html')) {
+      const rawText = await resp.text();
+      if (rawText.trim().startsWith('{')) {
+        const seed = JSON.parse(rawText);
+        const initialBooks: Book[] = (seed.books || []).map((b: string[]) => ({
         id: b[0],
         t: b[1],
         a: b[2],
@@ -166,6 +169,7 @@ export async function initializeLibraryData(): Promise<LibraryState> {
         del: del || [],
         cards: cards || {},
       };
+      }
     }
   } catch (err) {
     console.error('Failed to load seed catalog JSON:', err);

@@ -73,12 +73,13 @@ export const SecurityDashboardTab: React.FC<SecurityDashboardTabProps> = ({
     setLoading(true);
     try {
       const resp = await fetch('/api/security/stats');
-      if (resp.ok) {
+      const contentType = resp.headers.get('content-type') || '';
+      if (resp.ok && contentType.includes('application/json')) {
         const data = await resp.json();
         setStats(data);
       }
-    } catch (err) {
-      console.error('Failed to fetch security stats:', err);
+    } catch {
+      // Ignore network / static hosting warnings
     } finally {
       setLoading(false);
     }
