@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { BookOpen, Plus, CheckCircle2, ShieldAlert, Sparkles, Globe, Search, ExternalLink, Loader2 } from 'lucide-react';
 import { Book, BookCopy } from '../types';
 import { sanitizeInput } from '../lib/security';
 
@@ -32,6 +32,12 @@ export const AddBookTab: React.FC<AddBookTabProps> = ({
     sh: '',
     copies: 1,
   });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchSources, setSearchSources] = useState<{ title: string; uri: string }[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -47,6 +53,56 @@ export const AddBookTab: React.FC<AddBookTabProps> = ({
       </div>
     );
   }
+
+  // Google Search Grounded Book Lookup
+  const handleGoogleSearchLookup = async () => {
+    const q = searchQuery.trim() || formData.t.trim();
+    if (!q) {
+      alert('Please enter a book title or subject to search with Google.');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchSources([]);
+
+    try {
+      const res = await fetch('/api/books/lookup-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to lookup bibliographic data.');
+      }
+
+      if (data.data) {
+        const bookData = data.data;
+        setFormData((prev) => ({
+          ...prev,
+          t: bookData.title || prev.t || q,
+          a: bookData.author || prev.a,
+          c: bookData.dewey || prev.c,
+          l: bookData.language || prev.l,
+          p: bookData.publisher || prev.p,
+          y: bookData.year || prev.y,
+          sh: bookData.shelf || prev.sh,
+          k: bookData.category || prev.k,
+        }));
+      }
+
+      if (Array.isArray(data.sources)) {
+        setSearchSources(data.sources);
+      }
+    } catch (err: unknown) {
+      console.error('Google search lookup error:', err);
+      setSearchError(err instanceof Error ? err.message : 'Error retrieving search data.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +154,8 @@ export const AddBookTab: React.FC<AddBookTabProps> = ({
         sh: '',
         copies: 1,
       });
+      setSearchQuery('');
+      setSearchSources([]);
       setTimeout(() => setSuccessMsg(null), 5000);
     } finally {
       setLoading(false);
@@ -124,6 +182,88 @@ export const AddBookTab: React.FC<AddBookTabProps> = ({
         >
           View Catalog →
         </button>
+      </div>
+
+      {/* Google Search Grounding Smart Bibliographic Assistant */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/20 via-emerald-900/10 to-amber-950/20 border border-emerald-500/30 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-xs font-bold text-emerald-900 dark:text-emerald-200">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Smart Auto-Fill via Google Search Grounding (gemini-3.8-flash)</span>
+          </div>
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
+            <Globe className="w-2.5 h-2.5" />
+            <span>Google Grounded</span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Enter book title or author (e.g. فتح الباري ابن حجر or Zad al-Ma'ad)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleGoogleSearchLookup();
+                }
+              }}
+              dir="auto"
+              className="w-full py-2 pl-9 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs outline-none focus:ring-2 focus:ring-emerald-600"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogleSearchLookup}
+            disabled={isSearching}
+            className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center space-x-1.5 transition disabled:opacity-50 shrink-0"
+          >
+            {isSearching ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Searching Google...</span>
+              </>
+            ) : (
+              <>
+                <Globe className="w-3.5 h-3.5" />
+                <span>Google Lookup</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {searchError && (
+          <p className="text-[11px] text-red-600 dark:text-red-400">
+            {searchError}
+          </p>
+        )}
+
+        {/* Display Verified Sources if Grounded */}
+        {searchSources.length > 0 && (
+          <div className="pt-2 border-t border-emerald-500/20 space-y-1">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+              <Globe className="w-3 h-3 text-emerald-600" />
+              <span>Verified Web Sources:</span>
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {searchSources.map((src, i) => (
+                <a
+                  key={i}
+                  href={src.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/30 text-[10px] text-emerald-800 dark:text-emerald-300 hover:underline"
+                >
+                  <span className="truncate max-w-[200px]">{src.title}</span>
+                  <ExternalLink className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {successMsg && (

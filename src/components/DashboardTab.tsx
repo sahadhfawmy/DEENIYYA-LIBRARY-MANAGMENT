@@ -18,6 +18,9 @@ import {
   CreditCard,
   Sliders,
   Check,
+  Globe,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { Book, BookCopy, Student, Loan, LibrarySettings } from '../types';
 import { TiltCard } from './TiltCard';
@@ -56,6 +59,51 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   const is3D = viewMode === '3d';
+
+  // Google Search Grounding Portal State (gemini-3.8-flash)
+  const [searchPrompt, setSearchPrompt] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState<{
+    reply: string;
+    sources: { title: string; uri: string }[];
+    queries: string[];
+    quotaNotice?: string;
+  } | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleRunGoogleSearch = async (customQ?: string) => {
+    const q = (customQ || searchPrompt).trim();
+    if (!q || searchLoading) return;
+    setSearchPrompt(q);
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', text: q }],
+          model: 'gemini-3.8-flash',
+          roleId: 'scholar',
+          searchGrounding: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to retrieve search results.');
+      }
+      setSearchResult({
+        reply: data.reply,
+        sources: data.sources || [],
+        queries: data.webSearchQueries || [],
+        quotaNotice: data.quotaNotice,
+      });
+    } catch (err: unknown) {
+      setSearchError(err instanceof Error ? err.message : 'Error executing Google Grounded search.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   // Numerical & Circulation Computations
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -514,6 +562,164 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Google Search Grounded Academic Research & Fact-Checker Portal (gemini-3.8-flash) */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-[#011a10] via-[#022919] to-[#01140c] text-white border-2 border-amber-400/40 shadow-xl relative overflow-hidden space-y-5">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10 border-b border-amber-400/30 pb-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-900/90 border border-amber-400/40 text-amber-300 text-xs font-semibold backdrop-blur-md">
+              <Globe className="w-3.5 h-3.5 text-amber-300" />
+              <span>Google Search Grounding Connected · gemini-3.8-flash</span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-white font-sans tracking-tight">
+              Live Islamic Academic Research & Fact-Checker
+            </h3>
+            <p className="text-xs text-emerald-200/90 font-arabic">
+              استكشف المراجع، الفتاوى المعاصرة، والمخطوطات الإسلامية الموثقة عبر محرك Google المباشر
+            </p>
+          </div>
+
+          <button
+            onClick={() => onNavigate('cat')}
+            className="self-start sm:self-auto px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-xs text-white font-semibold transition"
+          >
+            Explore Catalog Collection →
+          </button>
+        </div>
+
+        {/* Input Bar */}
+        <div className="relative z-10 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-amber-400 absolute left-3.5 top-3.5" />
+              <input
+                type="text"
+                placeholder="Ask any Islamic research question, verify a Hadith commentary, or check international editions..."
+                value={searchPrompt}
+                onChange={(e) => setSearchPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleRunGoogleSearch();
+                  }
+                }}
+                dir="auto"
+                disabled={searchLoading}
+                className="w-full text-xs sm:text-sm py-3 pl-10 pr-4 rounded-2xl border border-amber-400/40 bg-black/40 text-white placeholder-emerald-200/60 focus:ring-2 focus:ring-amber-400 outline-none transition"
+              />
+            </div>
+            <button
+              onClick={() => handleRunGoogleSearch()}
+              disabled={searchLoading || !searchPrompt.trim()}
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs shadow-md transition disabled:opacity-40 flex items-center space-x-1.5 shrink-0"
+            >
+              {searchLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Searching Google...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Search Google</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Quick Research Topic Chips */}
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs scrollbar-none">
+            <span className="text-amber-300 font-bold shrink-0 text-[11px]">Quick Topics:</span>
+            {[
+              'أهم شروح صحيح البخاري وطبعاتها المحققة',
+              'أحدث أبحاث مجمع الفقه الإسلامي الدولي',
+              'Classical Usul al-Fiqh Methodology',
+              'Dewey 297 Classification for Islamic Manuscripts',
+            ].map((topic, i) => (
+              <button
+                key={i}
+                onClick={() => handleRunGoogleSearch(topic)}
+                disabled={searchLoading}
+                className="shrink-0 px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-amber-400/30 text-white text-[11px] font-medium transition"
+              >
+                {topic}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Error message */}
+        {searchError && (
+          <div className="p-3 rounded-xl bg-red-900/60 border border-red-500/50 text-red-200 text-xs">
+            {searchError}
+          </div>
+        )}
+
+        {/* Search Results Display */}
+        {searchResult && (
+          <div className="p-5 rounded-2xl bg-black/50 border border-amber-400/30 space-y-4 text-xs animate-in fade-in duration-300 relative z-10">
+            <div className="flex items-center justify-between border-b border-amber-400/20 pb-2">
+              <span className="font-bold text-amber-300 flex items-center space-x-1.5">
+                <Globe className="w-4 h-4 text-emerald-400" />
+                <span>Verified Google Grounded Scholarly Response</span>
+              </span>
+              <span className="font-mono text-[10px] text-emerald-300">
+                gemini-3.8-flash (Search Grounded)
+              </span>
+            </div>
+
+            {/* Answer Text */}
+            <div dir="auto" className="text-slate-100 whitespace-pre-wrap leading-relaxed text-xs sm:text-sm font-sans">
+              {searchResult.reply}
+            </div>
+
+            {/* Google Search Queries */}
+            {searchResult.queries.length > 0 && (
+              <div className="pt-2 border-t border-white/10 flex items-center space-x-2 flex-wrap gap-1 text-[11px]">
+                <span className="font-bold text-slate-400">Google Queries Executed:</span>
+                {searchResult.queries.map((q, qI) => (
+                  <span key={qI} className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-mono text-[10px]">
+                    "{q}"
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Verified Source Links */}
+            {searchResult.sources.length > 0 && (
+              <div className="pt-2 border-t border-white/10 space-y-1.5">
+                <span className="font-bold text-amber-300 block text-[11px] flex items-center space-x-1">
+                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Verified Web Sources & Citations:</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {searchResult.sources.map((src, sI) => (
+                    <a
+                      key={sI}
+                      href={src.uri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2 rounded-xl bg-white/10 hover:bg-white/15 border border-amber-400/30 text-[11px] text-amber-200 hover:text-white transition group"
+                    >
+                      <span className="truncate pr-2 font-medium">🔗 {src.title || src.uri}</span>
+                      <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-amber-300 shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quota Notice if present */}
+            {searchResult.quotaNotice && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-relaxed">
+                ℹ️ {searchResult.quotaNotice}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
