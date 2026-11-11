@@ -25,6 +25,7 @@ import {
 import { Book, BookCopy, Student, Loan, LibrarySettings } from '../types';
 import { TiltCard } from './TiltCard';
 import { Library3DStacksVisualizer } from './Library3DStacksVisualizer';
+import { GenreDonutChart } from './GenreDonutChart';
 import { safeFetchJson, generateIslamicScholarResponse } from '../lib/scholarEngine';
 
 interface DashboardTabProps {
@@ -417,6 +418,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           onNavigate('cat');
         }}
         is3DMode={is3D}
+      />
+
+      {/* D3.js Donut Chart: Catalog Genre & Discipline Distribution */}
+      <GenreDonutChart
+        books={books}
+        copies={copies}
+        onNavigateGenre={(genre) => {
+          onNavigate('cat');
+        }}
+        is3D={is3D}
       />
 
       {/* Middle Section: Circulation Analytics & Quick Launch Hub */}
