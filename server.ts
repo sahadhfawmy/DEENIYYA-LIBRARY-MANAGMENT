@@ -12,7 +12,26 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isProd = process.env.NODE_ENV === 'production';
-const PORT = parseInt(process.env.PORT || '3000', 10);
+// Port resolution: AI Studio dev/app server MUST listen on port 3000
+// (--default-app-port=3000 is proxied by nginx on 8080).
+// If process.env.PORT is 8080, it refers to the public nginx port, not this application server.
+function resolveServerPort(): number {
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    const val = parseInt(process.argv[portArgIndex + 1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  if (process.env.DEFAULT_APP_PORT) {
+    const val = parseInt(process.env.DEFAULT_APP_PORT, 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  if (process.env.PORT && process.env.PORT !== '8080') {
+    const val = parseInt(process.env.PORT, 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  return 3000;
+}
+const PORT = resolveServerPort();
 
 // Initialize Gemini Client
 const apiKey = process.env.GEMINI_API_KEY;
@@ -34,7 +53,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // XSS & HTTP Security Headers via Helmet
-// Relax frameguard for Google AI Studio iframe environment
+// Relax frameguard and crossOriginOpenerPolicy for Google AI Studio iframe environment
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -66,6 +85,7 @@ app.use(
         frameAncestors: ["'self'", 'https:', 'http:'],
       },
     },
+    crossOriginOpenerPolicy: false, // Essential for Google AI Studio preview iframe
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     frameguard: false, // Allows embedding within Google AI Studio preview frame
@@ -809,6 +829,11 @@ Return a JSON object with:
 });
 
 
+// 404 handler for unmatched /api routes (ensures API callers never receive HTML)
+app.all('/api/*', (_req: Request, res: Response) => {
+  res.status(404).json({ success: false, error: 'API route not found' });
+});
+
 // Vite middleware or production static serving
 async function setupVite() {
   if (!isProd) {
@@ -821,9 +846,6 @@ async function setupVite() {
   } else {
     const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
-    app.all('/api/*', (_req: Request, res: Response) => {
-      res.status(404).json({ success: false, error: 'API route not found' });
-    });
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
@@ -833,6 +855,13 @@ async function setupVite() {
     console.log(`[SECURE SERVER] Deeniya Arabic College Library running on http://0.0.0.0:${PORT}`);
   });
 }
+
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]:', reason);
+});
 
 setupVite().catch((err) => {
   console.error('[SERVER ERROR] Failed to start server:', err);
